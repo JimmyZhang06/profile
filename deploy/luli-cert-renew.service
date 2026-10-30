@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew Luli HTTPS certificates
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/veya/acme-venv/bin/certbot renew --quiet --config-dir /etc/luli/acme --work-dir /var/lib/luli-acme --logs-dir /var/log/luli/acme --deploy-hook /etc/luli/reload-apache.sh

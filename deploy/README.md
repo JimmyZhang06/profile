@@ -38,6 +38,21 @@ vhost and validate before reload. Enable automated certificate renewal with a
 deploy hook that validates and gracefully reloads Apache. Test renewal once.
 Keep any existing certificate automation intact.
 
+The initial server installation reuses the already-installed Certbot executable
+at `/opt/veya/acme-venv/bin/certbot`, but uses entirely separate configuration,
+work and log directories (`/etc/luli/acme`, `/var/lib/luli-acme`,
+`/var/log/luli/acme`). Install `luli-cert-renew.service` and its timer, and the
+`reload-apache.sh` hook at `/etc/luli/reload-apache.sh` with mode 0755. Enable
+the timer after a successful webroot issuance.
+
+While the custom domain's DNS is pending, the preview hostname is
+`resume-47-93-237-199.sslip.io`. Generate the HTTPS vhost with that hostname in
+place of `resume.jimmyzhang.xyz`. Once DNS is ready, issue an additional
+certificate for the custom domain and install its own HTTPS vhost. Browser
+storage is origin-specific: export a workspace backup from the preview before
+moving to the custom domain, then import it there. No automatic cross-origin
+transfer or cloud upload is performed.
+
 ## Cloud activation later
 
 Configure a dedicated PostgreSQL database, real SMTP delivery, the administrator
