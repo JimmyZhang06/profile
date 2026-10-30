@@ -1,0 +1,68 @@
+/* Monochrome palette. Dark tokens are screen-only; printed resumes stay light. */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --sidebar-bg: #f7f7f7;
+  --canvas-bg: #f2f2f2;
+  --surface-card: #ffffff;
+  --surface-subtle: #fafafa;
+  --surface-muted: #f3f3f3;
+  --surface-hover: #eaeaea;
+  --surface-selected: #e7e7e7;
+  --field-bg: #ffffff;
+  --text-primary: #242424;
+  --text-strong: #151515;
+  --text-secondary: #555555;
+  --text-muted: #707070;
+  --text-disabled: #999999;
+  --border-subtle: #e9e9e9;
+  --border: #d9d9d9;
+  --border-strong: #aaaaaa;
+  --focus-ring: #767676;
+  --selection-bg: #dcdcdc;
+  --action-bg: #242424;
+  --action-hover: #404040;
+  --action-fg: #ffffff;
+  --control-disabled: #e9e9e9;
+  --toggle-off: #b8b8b8;
+  --toggle-thumb: #ffffff;
+  --shadow-color: rgb(0 0 0 / 0.08);
+  --shadow-heavy: rgb(0 0 0 / 0.17);
+  --edge-highlight: rgb(255 255 255 / 0.85);
+  --scrim: rgb(0 0 0 / 0.25);
+}
+
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #151515;
+    --sidebar-bg: #101010;
+    --canvas-bg: #101010;
+    --surface-card: #1b1b1b;
+    --surface-subtle: #191919;
+    --surface-muted: #222222;
+    --surface-hover: #2b2b2b;
+    --surface-selected: #2e2e2e;
+    --field-bg: #1c1c1c;
+    --text-primary: #ededed;
+    --text-strong: #fafafa;
+    --text-secondary: #bcbcbc;
+    --text-muted: #9b9b9b;
+    --text-disabled: #717171;
+    --border-subtle: #2b2b2b;
+    --border: #3a3a3a;
+    --border-strong: #5a5a5a;
+    --focus-ring: #a0a0a0;
+    --selection-bg: #454545;
+    --action-bg: #efefef;
+    --action-hover: #d3d3d3;
+    --action-fg: #161616;
+    --control-disabled: #303030;
+    --toggle-off: #4a4a4a;
+    --toggle-thumb: #d8d8d8;
+    --shadow-color: rgb(0 0 0 / 0.24);
+    --shadow-heavy: rgb(0 0 0 / 0.4);
+    --edge-highlight: rgb(255 255 255 / 0.06);
+    --scrim: rgb(0 0 0 / 0.6);
+  }
+}

@@ -1,0 +1,95 @@
+.assistant-turn .assistant-identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 24px;
+  margin-bottom: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.assistant-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  transform-origin: 50% 65%;
+}
+
+.assistant-mark .brand-mark {
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.assistant-mark::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 32%, var(--text-strong) 49%, transparent 66%) 180% 0 / 250% 100% no-repeat;
+  mask: url('../assets/luli-mark.svg') center / contain no-repeat;
+}
+
+.assistant-name {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .035em;
+}
+
+.assistant-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.assistant-phase::before {
+  content: '';
+  flex: 0 0 1px;
+  width: 1px;
+  height: 10px;
+  background: var(--border-strong);
+}
+
+.assistant-identity[data-phase="thinking"] .assistant-mark {
+  animation: assistant-logo-breathe 2.4s ease-in-out infinite;
+}
+.assistant-identity[data-phase="thinking"] .brand-mark { opacity: .5; }
+.assistant-identity[data-phase="thinking"] .assistant-mark::after {
+  opacity: 1;
+  animation: assistant-logo-light 2.4s ease-in-out infinite;
+}
+.assistant-identity[data-phase="responding"] .assistant-mark {
+  animation: assistant-logo-answer 3.2s ease-in-out infinite;
+}
+
+.welcome-symbol .brand-mark { display: block; width: 24px; height: 24px; }
+
+@keyframes assistant-logo-breathe {
+  0%, 100% { transform: translateY(0) scale(.96); }
+  50% { transform: translateY(-1px) scale(1.035); }
+}
+@keyframes assistant-logo-light {
+  0%, 12% { background-position: 180% 0; }
+  72%, 100% { background-position: -80% 0; }
+}
+@keyframes assistant-logo-answer {
+  0%, 100% { opacity: .66; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-identity .assistant-mark { animation: none; transform: none; opacity: 1; }
+  .assistant-identity .assistant-mark .brand-mark { opacity: 1; }
+  .assistant-identity .assistant-mark::after { display: none; animation: none; }
+}

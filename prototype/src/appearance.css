@@ -1,0 +1,81 @@
+/* Surface roles build on the shared tokens without changing workspace density. */
+@media screen {
+  body, .app-shell, .chat-panel, .composer-dock, .workspace-page { background: var(--bg); color: var(--text-primary); }
+  .sidebar { background: var(--sidebar-bg); border-color: var(--border-subtle); }
+  .sidebar-search { border: 1px solid transparent; }
+  .sidebar-search:focus-within { border-color: var(--border); background: var(--surface-muted); }
+  .nav-row, .document-nav { box-shadow: inset 0 0 0 1px transparent; }
+  .nav-row.active, .document-nav.active, .rail-current .active {
+    background: var(--surface-selected);
+    box-shadow: inset 0 0 0 1px var(--border), inset 0 2px 0 var(--edge-highlight), 0 2px 4px var(--shadow-color);
+    color: var(--text-strong);
+  }
+  .wordmark-dot { color: inherit; }
+  .account-avatar, .artifact-icon, .connection-icon { background: var(--surface-muted); color: var(--text-secondary); border-color: var(--border); }
+  .chat-header, .canvas-header, .canvas-footer, .page-topbar, .page-footer { background: var(--bg); border-color: var(--border-subtle); }
+  .canvas-panel { background: var(--canvas-bg); }
+  .resume-page { background: var(--surface-card); color: var(--text-primary); border-color: var(--border); box-shadow: 0 2px 16px var(--shadow-color); }
+  .reading-mode .resume-intro h1, .resume-section h2 { color: var(--text-strong); }
+  .resume-section h2 { border-color: var(--border-strong); }
+  .user-bubble { background: var(--surface-hover); color: var(--text-primary); }
+  .composer { background: var(--surface-muted); border-color: var(--border); box-shadow: inset 0 1px 0 var(--edge-highlight); }
+  .composer:focus-within { background: var(--surface-card); border-color: var(--border-strong); box-shadow: 0 0 0 1px var(--border); }
+  .composer textarea, .user-edit textarea, .sidebar-search input { color: var(--text-primary); }
+  .composer textarea::placeholder { color: var(--text-muted); }
+  .composer-selection { background: var(--surface-hover); border-color: var(--border-strong); }
+  .resume-artifact, .revision-card { background: var(--surface-card); border-color: var(--border); box-shadow: inset 0 1px 0 var(--edge-highlight); }
+  .resume-artifact:hover { background: var(--surface-muted); border-color: var(--border-strong); }
+  .revision-heading, .revision-old, .material-destination { background: var(--surface-subtle); }
+  .revision-applied { border-color: var(--border-strong); }
+  .revision-applied .revision-status, .save-status.saved > svg { color: var(--text-secondary); }
+  .menu-popover { background: var(--surface-card); border-color: var(--border); box-shadow: 0 8px 32px var(--shadow-heavy), inset 0 1px 0 var(--edge-highlight); }
+  .menu-popover > button:hover, .menu-popover > button:focus-visible { background: var(--surface-hover); }
+  .field input, .field textarea, .field select, .version-name, .inline-editor textarea { background: var(--field-bg); color: var(--text-primary); border-color: var(--border); }
+  .field input:focus, .field textarea:focus, .field select:focus, .version-name:focus { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--surface-hover); }
+  .search-input { background: var(--field-bg); border-color: var(--border); }
+  .search-input:focus-within { border-color: var(--focus-ring); box-shadow: 0 0 0 2px var(--surface-hover); }
+  .search-input input { color: var(--text-primary); background: transparent; }
+  .search-input input::placeholder { color: var(--text-muted); }
+  .material-item.chosen, .new-project-list > label.checked, .version-row.selected { background: var(--surface-muted); }
+  .material-item.chosen { box-shadow: inset 0 0 0 1px var(--border-subtle), inset 0 2px 0 var(--edge-highlight); }
+  .material-saved, .form-error, .message-notice.error, .page-unsaved, .workspace-alert, .discard-prompt { background: var(--surface-muted); color: var(--text-primary); border-color: var(--border-strong); }
+  .material-updated, .material-match, .material-method button { color: var(--text-secondary); }
+  .material-tag, .subtle-badge { background: var(--surface-subtle); border-color: var(--border); }
+  .project-detail-section .field textarea, .project-detail-section .field input { background: var(--field-bg); border-color: var(--border); }
+  .project-detail-section .field textarea::placeholder { color: var(--text-muted); }
+  .project-section-nav > button:hover, .project-section-nav > button:focus-visible { background: var(--surface-hover); color: var(--text-primary); }
+  .toggle { background: var(--toggle-off); }
+  input[type="checkbox"]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+  .toggle > span { background: var(--toggle-thumb); }
+  .toggle.on { background: var(--action-bg); }
+  .toggle.on > span { background: var(--action-fg); }
+  .button-primary, .send-button { background: var(--action-bg); color: var(--action-fg); border-color: var(--action-bg); }
+  .button-primary:hover:not(:disabled), .send-button:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
+  .button-primary:disabled, .send-button:disabled { background: var(--control-disabled); border-color: var(--control-disabled); color: var(--text-disabled); }
+  .button-secondary, .export-button { background: var(--surface-card); color: var(--text-primary); border-color: var(--border); box-shadow: inset 0 1px 0 var(--edge-highlight); }
+  .button-secondary:hover:not(:disabled) { background: var(--surface-hover); }
+  .toast { background: var(--action-bg); color: var(--action-fg); }
+  .toast .icon-button { color: inherit; }
+  .toast .icon-button:hover { background: var(--action-hover); }
+  .canvas-view-switch { background: var(--surface-muted); }
+  .canvas-view-switch > button[aria-pressed=true] { background: var(--surface-card); color: var(--text-primary); box-shadow: 0 1px 3px var(--shadow-color), inset 0 0 0 1px var(--border); }
+  ::selection { background: var(--selection-bg); color: var(--text-strong); }
+
+  .appearance-menu { width: 100%; }
+  .appearance-menu > .menu-trigger { width: 100%; height: 40px; padding: 10px; gap: 10px; color: var(--text-secondary); font-size: 14px; border-radius: 8px; }
+  .appearance-menu > .menu-trigger > svg:first-child { flex-shrink: 0; }
+  .appearance-menu > .menu-trigger > span { flex: 1; text-align: left; }
+  .appearance-menu > .menu-trigger > small { font-size: 12px; color: var(--text-muted); }
+  .appearance-menu > .menu-trigger > svg:last-child { display: none; }
+  .sidebar:not(.expanded) .appearance-menu > .menu-trigger { justify-content: center; padding: 9px; }
+  .appearance-menu .menu-popover { left: calc(100% + 12px); right: auto; bottom: 0; top: auto; width: 192px; min-width: 192px; }
+  .sidebar.expanded .appearance-menu .menu-popover { left: 0; bottom: calc(100% + 8px); }
+  .appearance-menu .menu-popover > button { min-height: 40px; }
+}
+
+@media print {
+  :root { color-scheme: light; }
+  .appearance-menu { display: none !important; }
+  .resume-page { background: #fff !important; color: #242424 !important; }
+  .resume-intro h1, .resume-section h2 { color: #151515 !important; }
+}

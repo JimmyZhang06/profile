@@ -1,0 +1,330 @@
+import { createServer } from "node:http";
+import { readFile, stat } from "node:fs/promises";
+import { resolve, extname, sep } from "node:path";
+import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
+import { createDatabase, one, query } from "./database.mjs";
+import { createAuthentication, identity, verifyAdmin } from "./auth.mjs";
+import { assert, HttpError, limit, audit } from "./security.mjs";
+import {
+  ensureWorkspace,
+  readWorkspace,
+  saveWorkspace,
+  importWorkspace,
+} from "./workspace.mjs";
+import { listConnections, saveConnection, streamModel } from "./models.mjs";
+import { adminRoute, seedTemplates, publicTemplates } from "./admin.mjs";
+
+export function json(res, status, data) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.end(JSON.stringify(data));
+}
+async function readBody(req) {
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    assert(size <= 9_000_000, 413, "请求内容过大");
+    chunks.push(chunk);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
+    throw new HttpError(400, "请求格式不正确");
+  }
+}
+export async function createCloudApp(config) {
+  const database = await createDatabase(config),
+    db = database.db;
+  const authentication = createAuthentication(db, config);
+  await authentication.migrate();
+  await database.migrate();
+  await seedTemplates(db);
+  const auth = authentication.auth,
+    authHandler = toNodeHandler(auth);
+  const publicAuthPaths = new Set([
+    "/get-session",
+    "/sign-in/email-otp",
+    "/email-otp/send-verification-otp",
+    "/sign-out",
+  ]);
+  async function handler(req, res) {
+    // Never trust a client-supplied IP header. Proxy-aware deployment can set a
+    // vetted address here later; local development uses the actual socket peer.
+    req.headers["x-luli-peer-ip"] = req.socket.remoteAddress;
+    const url = new URL(req.url, config.origin),
+      path = url.pathname;
+    try {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Referrer-Policy", "same-origin");
+      res.setHeader("X-Frame-Options", "DENY");
+      if (path === "/api/cloud/health")
+        return json(res, 200, {
+          ok: true,
+          cloudEnabled: true,
+          mode: config.production ? "production" : "development",
+          mailMode: config.smtp ? "smtp" : "local-mailbox",
+        });
+      if (path.startsWith("/api/")) {
+        const origin = req.headers.origin;
+        assert(
+          !origin || (config.origins || [config.origin]).includes(origin),
+          403,
+          "请求来源不被允许",
+        );
+        if (req.method !== "GET")
+          assert(
+            req.headers["x-luli-client"] === "workspace",
+            403,
+            "请求缺少客户端标识",
+          );
+      }
+      if (path.startsWith("/api/auth/")) {
+        assert(publicAuthPaths.has(path.slice(9)), 404, "认证接口未开放");
+        await limit(db, "auth-ip:" + req.socket.remoteAddress, 60, 60);
+        return await authHandler(req, res);
+      }
+      if (!path.startsWith("/api/")) {
+        if (!config.production)
+          return json(res, 404, { error: "请访问前端开发地址" });
+        const root = resolve("dist/client"),
+          requested = resolve(root, "." + decodeURIComponent(path));
+        assert(
+          requested === root || requested.startsWith(root + sep),
+          403,
+          "路径无效",
+        );
+        let file = requested;
+        try {
+          if (!(await stat(file)).isFile()) file = resolve(root, "index.html");
+        } catch {
+          file = resolve(root, "index.html");
+        }
+        const types = {
+          ".html": "text/html; charset=utf-8",
+          ".js": "text/javascript; charset=utf-8",
+          ".css": "text/css; charset=utf-8",
+          ".svg": "image/svg+xml",
+          ".png": "image/png",
+          ".ico": "image/x-icon",
+        };
+        res.writeHead(200, {
+          "Content-Type": types[extname(file)] || "application/octet-stream",
+          "Cache-Control":
+            extname(file) === ".html" ? "no-cache" : "public,max-age=3600",
+        });
+        return res.end(await readFile(file));
+      }
+      const isAdmin = path.startsWith("/api/admin/");
+      if (
+        path === "/api/cloud/me" &&
+        req.method === "GET" &&
+        !(await auth.api.getSession({ headers: fromNodeHeaders(req.headers) }))
+      )
+        return json(res, 200, { user: null });
+      const actor = await identity(req, auth, db, {
+        admin: isAdmin,
+        stepUp: ![
+          "/api/admin/verify",
+          "/api/admin/setup",
+          "/api/admin/gate",
+        ].includes(path),
+      });
+      await limit(db, "api:" + actor.user.id, 300, 60);
+      const body = ["POST", "PUT", "DELETE"].includes(req.method)
+        ? await readBody(req)
+        : {};
+      let result;
+      if (path === "/api/cloud/me" && req.method === "GET") {
+        await query(
+          db,
+          "UPDATE account_access SET last_active=NOW() WHERE user_id=$1 AND last_active<NOW()-INTERVAL '5 minutes'",
+          [actor.user.id],
+        );
+        result = {
+          user: {
+            id: actor.user.id,
+            email: actor.user.email,
+            name: actor.user.name,
+            role: actor.access.role,
+            twoFactorEnabled: !!actor.user.twoFactorEnabled,
+          },
+          session: { id: actor.session.id, expiresAt: actor.session.expiresAt },
+          quota: {
+            limit: actor.access.monthly_limit,
+            used: (
+              await one(
+                db,
+                "SELECT COUNT(*)::int AS count FROM model_usage WHERE user_id=$1 AND started_at>=date_trunc('month',NOW())",
+                [actor.user.id],
+              )
+            ).count,
+          },
+        };
+      } else if (path === "/api/cloud/workspace" && req.method === "GET")
+        result = await ensureWorkspace(db, actor.user.id);
+      else if (path === "/api/cloud/workspace" && req.method === "PUT")
+        result = await saveWorkspace(db, actor.user.id, body);
+      else if (path === "/api/cloud/import" && req.method === "POST")
+        result = await importWorkspace(db, actor.user.id, body);
+      else if (path === "/api/cloud/backups" && req.method === "GET")
+        result = {
+          items: await query(
+            db,
+            "SELECT id,revision,created_at FROM sync_backups WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 30",
+            [actor.user.id],
+          ),
+        };
+      else if (path.startsWith("/api/cloud/backups/") && req.method === "GET") {
+        result = await one(
+          db,
+          "SELECT data,revision,created_at FROM sync_backups WHERE owner_id=$1 AND id=$2",
+          [actor.user.id, path.split("/").at(-1)],
+        );
+        assert(result, 404, "恢复副本不存在");
+      } else if (path === "/api/cloud/connections" && req.method === "GET")
+        result = { connections: await listConnections(db, actor.user.id) };
+      else if (path === "/api/cloud/connections" && req.method === "POST")
+        result = await saveConnection(db, actor.user.id, body, config);
+      else if (
+        ["/api/cloud/chat", "/api/cloud/test"].includes(path) &&
+        req.method === "POST"
+      ) {
+        result = await streamModel(req, res, body, actor, db, config, {
+          testing: path.endsWith("/test"),
+          dispatcherFactory: config.modelDispatcher,
+        });
+        if (res.headersSent) return;
+      } else if (path === "/api/cloud/templates" && req.method === "GET")
+        result = { items: await publicTemplates(db) };
+      else if (path === "/api/cloud/sessions" && req.method === "GET")
+        result = {
+          items: await query(
+            db,
+            'SELECT id,"userAgent" AS user_agent,"ipAddress" AS ip_address,"createdAt" AS created_at,"expiresAt" AS expires_at FROM session WHERE "userId"=$1 AND "expiresAt">NOW() ORDER BY "createdAt" DESC',
+            [actor.user.id],
+          ),
+          currentId: actor.session.id,
+        };
+      else if (path === "/api/cloud/sessions/revoke" && req.method === "POST") {
+        if (body.others)
+          await query(db, 'DELETE FROM session WHERE "userId"=$1 AND id<>$2', [
+            actor.user.id,
+            actor.session.id,
+          ]);
+        else {
+          assert(
+            body.id !== actor.session.id,
+            400,
+            "请使用退出登录结束当前会话",
+          );
+          await query(db, 'DELETE FROM session WHERE "userId"=$1 AND id=$2', [
+            actor.user.id,
+            body.id,
+          ]);
+        }
+        result = { ok: true };
+      } else if (
+        path === "/api/cloud/account/delete" &&
+        req.method === "POST"
+      ) {
+        assert(
+          actor.access.role !== "admin",
+          400,
+          "管理员请先完成账号交接，再通过部署维护流程注销。",
+        );
+        assert(body.email === actor.user.email, 400, "请完整输入当前邮箱");
+        await limit(db, "delete:" + actor.user.id, 5, 300);
+        const verified = await auth.api.verifyEmailOTP({
+          headers: fromNodeHeaders(req.headers),
+          body: { email: actor.user.email, otp: String(body.otp || "") },
+          asResponse: true,
+        });
+        assert(verified.ok, 400, "邮箱验证码无效");
+        await db.transaction().execute(async (tx) => {
+          await audit(
+            tx,
+            actor.user,
+            "account.delete",
+            actor.user.id,
+            null,
+            { deleted: true },
+            "用户验证邮箱后主动注销",
+          );
+          await query(
+            tx,
+            "DELETE FROM model_connections WHERE owner_id=$1 AND scope='user'",
+            [actor.user.id],
+          );
+          await query(tx, 'DELETE FROM "user" WHERE id=$1', [actor.user.id]);
+        });
+        result = { ok: true };
+      } else if (path === "/api/admin/gate" && req.method === "GET")
+        result = {
+          enabled: !!actor.user.twoFactorEnabled,
+          verified: !!(await one(
+            db,
+            "SELECT session_id FROM admin_grants WHERE session_id=$1 AND expires_at>NOW()",
+            [actor.session.id],
+          )),
+        };
+      else if (path === "/api/admin/setup" && req.method === "POST") {
+        assert(
+          !actor.user.twoFactorEnabled,
+          409,
+          "此账号已经绑定验证器，请使用验证器或恢复代码。",
+        );
+        assert(
+          new Date(actor.session.createdAt).getTime() > Date.now() - 600000,
+          403,
+          "请重新登录后绑定验证器",
+        );
+        result = await auth.api.enableTwoFactor({
+          headers: fromNodeHeaders(req.headers),
+          body: { method: "totp" },
+        });
+      } else if (path === "/api/admin/verify" && req.method === "POST")
+        result = await verifyAdmin(req, res, body, auth, db);
+      else if (isAdmin)
+        result = await adminRoute({
+          db,
+          config,
+          actor,
+          path: path.slice(10),
+          method: req.method,
+          body,
+          url,
+        });
+      else throw new HttpError(404, "接口不存在");
+      return json(res, 200, result);
+    } catch (error) {
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      const status = Number(error.status) || Number(error.statusCode) || 500;
+      json(res, status >= 400 && status < 600 ? status : 500, {
+        error: status < 500 ? error.message : "服务暂时不可用，请稍后重试。",
+        code: error.code || "SERVER_ERROR",
+        ...(error.details || {}),
+      });
+      if (status >= 500) console.error("[api]", error.code || error.name);
+    }
+  }
+  const server = createServer(handler);
+  server.requestTimeout = 130000;
+  server.headersTimeout = 15000;
+  return {
+    server,
+    db,
+    auth,
+    config,
+    async close() {
+      await new Promise((resolve) => server.close(resolve));
+      await database.close();
+    },
+  };
+}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#fafafa" />
+    <style>:root{color-scheme:light}@media screen{:root[data-theme="dark"]{color-scheme:dark;background:#151515}}</style>
+    <script>
+      // Set appearance before first paint; keep the key in sync with useTheme.
+      (() => {
+        let preference = 'system';
+        try { const saved = localStorage.getItem('luli.appearance.v1'); if (['light', 'dark', 'system'].includes(saved)) preference = saved; } catch {}
+        const dark = preference === 'dark' || (preference === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.querySelector('meta[name="theme-color"]').content = dark ? '#151515' : '#ffffff';
+      })();
+    </script>
+    <title>履历 · 简历工作空间</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

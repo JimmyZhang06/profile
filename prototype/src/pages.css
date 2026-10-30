@@ -1,0 +1,111 @@
+.editor-workspace, .workspace-page-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.editor-workspace[hidden], .workspace-page-host[hidden] { display: none !important; }
+
+/* Pages occupy the main workspace; there is no backdrop, floating frame or trap. */
+.workspace-page {
+  --page-width: 760px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  background: var(--bg);
+}
+.workspace-page.page-wide { --page-width: 960px; }
+.page-topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 52px;
+  flex-shrink: 0;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  margin-left: -8px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.page-back:hover { background: var(--surface-muted); }
+.page-location { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; color: var(--text-secondary); }
+.page-location > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); }
+.page-location > span:first-child { white-space: nowrap; }
+.page-document-title { margin-left: auto; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-secondary); }
+.page-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+.page-content { max-width: var(--page-width); margin: 0 auto; padding: 30px 32px 40px; }
+.page-heading { margin-bottom: 28px; }
+.page-heading h1 { margin: 0; font-size: 25px; line-height: 1.5; font-weight: 600; letter-spacing: -.4px; }
+.page-heading h1:focus { outline: none; }
+.page-heading p { margin: 9px 0 0; font-size: 14px; line-height: 1.8; color: var(--text-secondary); }
+.page-footer { flex-shrink: 0; border-top: 1px solid var(--line); background: var(--bg); }
+.page-footer-content { max-width: var(--page-width); margin-inline: auto; padding: 14px 32px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+.page-footer-content > .button:only-child { margin-left: auto; }
+.workspace-page .field textarea { min-height: 100px; }
+.workspace-page .library-tools { margin-bottom: 22px; }
+.workspace-page .project-library-item { border-radius: 0; padding-block: 22px; }
+.workspace-page .project-library-item.chosen { border-radius: 9px; }
+.workspace-page .selected-projects { margin-top: 30px; }
+.workspace-page .project-item-main .icon-button { width: 32px; height: 32px; }
+.workspace-page .settings-tabs { margin-bottom: 26px; }
+.workspace-page .settings-tabs > button { padding: 10px 3px 14px; }
+.workspace-page .export-preview { max-width: 540px; }
+.workspace-page .export-option { padding: 20px 10px; }
+.workspace-page .back-link { font-size: 13px; }
+.sidebar .nav-row.active { background: var(--surface-hover); color: var(--text-primary); }
+.page-leave-notice { display: flex; align-items: center; flex-shrink: 0; gap: 12px; padding: 10px 24px; border-bottom: 1px solid var(--border); background: var(--surface-muted); font-size: 14px; line-height: 1.6; }
+.page-leave-notice > span { flex: 1; }
+.page-leave-notice .button { min-height: 34px; font-size: 13px; }
+
+/* Text editing is an in-flow area, not a floating card covering the document. */
+@media screen {
+  .canvas-panel .inline-editor { position: static; flex-shrink: 0; max-width: none; width: 100%; margin: 0; padding: 15px 22px; border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; }
+  .canvas-panel .inline-editor textarea { min-height: 96px; max-height: 180px; }
+  .canvas-panel .inline-editor-label { margin-bottom: 9px; }
+  .canvas-panel .inline-editor-actions { margin-top: 10px; }
+}
+
+@media (min-width: 1500px) {
+  .page-content { padding-top: 36px; }
+}
+@media (max-width: 900px) {
+  .page-topbar { padding-inline: 20px; gap: 14px; }
+  .page-document-title { display: none; }
+  .page-content { padding-inline: 24px; }
+  .page-footer-content { padding-inline: 24px; }
+  .page-leave-notice { padding-inline: 20px; flex-wrap: wrap; gap: 8px; }
+  .page-leave-notice > span { flex-basis: 100%; }
+}
+@media (max-width: 540px) {
+  .page-topbar { padding-inline: 16px; gap: 12px; }
+  .page-location > span:first-child, .page-location > svg { display: none; }
+  .page-content { padding: 24px 18px 30px; }
+  .page-heading { margin-bottom: 24px; }
+  .page-heading h1 { font-size: 22px; }
+  .page-footer-content { padding: 12px 18px; flex-wrap: wrap; gap: 10px; }
+  .page-footer-content > .footer-note { flex: 1 1 100%; }
+  .page-footer-content > .button:last-child { margin-left: auto; }
+  .workspace-page .library-filters { flex-wrap: wrap; }
+  .workspace-page .library-filters > button { font-size: 12px; }
+  .workspace-page .library-filters .sort-button { margin-left: 0; }
+  .workspace-page .project-item-main > label { flex-basis: auto; }
+  .workspace-page .project-item-main strong { font-size: 14px; }
+  .canvas-panel .inline-editor { padding: 14px 16px; }
+  .page-leave-notice { padding: 10px 16px; }
+}
+@media print {
+  .workspace-page-host, .page-leave-notice { display: none !important; }
+  .editor-workspace, .editor-workspace[hidden] { display: block !important; height: auto; overflow: visible; }
+}

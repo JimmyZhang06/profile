@@ -1,0 +1,40 @@
+{
+  "name": "luli-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
+    "dev:api": "node --env-file-if-exists=.env server/api.mjs",
+    "start": "node --env-file-if-exists=.env server/api.mjs",
+    "build": "vite build && node scripts/prepare-sites-build.mjs",
+    "preview": "vite preview",
+    "test": "node --test tests/workspace.test.mjs tests/navigation.test.mjs tests/projects.test.mjs tests/interaction.test.mjs tests/formatting.test.mjs tests/cloud.test.mjs tests/cloud-sync.test.mjs tests/deployment.test.mjs",
+    "test:sites": "node --test tests/sites-worker.test.mjs",
+    "dev:client": "vite",
+    "test:cloud": "node --test tests/cloud.test.mjs tests/cloud-sync.test.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.13",
+    "@tabler/icons-react": "^3.50.0",
+    "@tiptap/pm": "3.32.1",
+    "@tiptap/react": "3.32.1",
+    "@tiptap/starter-kit": "3.32.1",
+    "@vitejs/plugin-react": "5.0.4",
+    "better-auth": "1.7.14",
+    "ipaddr.js": "2.5.0",
+    "kysely": "0.28.17",
+    "kysely-pglite": "0.6.1",
+    "nodemailer": "10.3.1",
+    "otplib": "13.5.0",
+    "pg": "8.23.1",
+    "qrcode": "1.5.4",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "undici": "8.12.3",
+    "vite": "6.4.2"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}

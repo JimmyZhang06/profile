@@ -1,0 +1,36 @@
+.curved-tabs {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  height: 52px;
+  margin: 0 0 24px;
+  padding: 0 14px;
+  isolation: isolate;
+}
+.curved-tabs-outline { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; overflow: visible; }
+.curved-tabs-fill { fill: var(--bg); }
+.curved-tabs-line { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+.curved-tabs > button {
+  display: grid;
+  place-items: center;
+  flex: 0 1 116px;
+  min-width: 0;
+  height: 46px;
+  padding: 5px 14px 3px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: nowrap;
+  border-radius: 13px;
+}
+.curved-tabs > button:hover { color: var(--text-primary); }
+.curved-tabs > button[aria-selected="true"] { color: var(--text-strong); font-weight: 600; }
+.curved-tabs > button:focus-visible { outline-offset: -6px; }
+.settings-tab-panel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 5px; border-radius: 8px; }
+@media (max-width: 540px) {
+  .curved-tabs { gap: 0; padding-inline: 10px; }
+  .curved-tabs > button { flex: 1 1 0; padding-inline: 6px; font-size: 14px; }
+}

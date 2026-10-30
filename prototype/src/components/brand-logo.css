@@ -1,0 +1,35 @@
+.sidebar .wordmark {
+  gap: 11px;
+  min-height: 40px;
+  border-radius: 6px;
+  color: var(--text-strong);
+}
+
+.sidebar .wordmark > .brand-mark {
+  display: block;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.sidebar .wordmark > .brand-wordmark {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  line-height: 1;
+  padding-bottom: 1px;
+}
+
+@media screen {
+  :root[data-theme="dark"] .brand-mark { filter: invert(1); }
+}
+
+@media screen and (max-width: 600px) {
+  .sidebar .wordmark > .brand-mark {
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+  }
+}
