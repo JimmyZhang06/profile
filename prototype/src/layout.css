@@ -1,5 +1,8 @@
 /* Task-level controls live once above the editor; view controls stay with the canvas. */
 @media screen {
+  body { min-width: 320px; }
+  /* Workspace panels own scrolling; the document must not add a second viewport scrollbar. */
+  html:has(.app-shell) { overflow: hidden; }
   .app-shell { overflow: clip; }
   .app-shell :is(.icon-button, .nav-row)[data-tooltip]::after { display: none; }
   .app-shell :is(.icon-button, .nav-row)[data-tooltip]:is(:hover, :focus-visible)::after { display: block; opacity: 1; visibility: visible; }
@@ -170,6 +173,10 @@
   .context-button { padding-inline: 6px; }
   .workspace-actions .review-indicator > span:last-child { display: none; }
 }
+@media screen and (min-width: 761px) and (max-width: 1180px) {
+  .app-shell.sidebar-open { grid-template-columns: 216px minmax(0, 1fr); }
+  .app-shell .sidebar.expanded { position: static; width: auto; box-shadow: none; }
+}
 @media screen and (max-width: 1000px) {
   .library-layout { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .selection-panel { grid-row: 1; position: static; }
@@ -190,9 +197,22 @@
   .workspace-page .field-grid { gap: 0 16px; }
 }
 @media screen and (max-width: 760px) {
+  /* Small screens switch to a full navigation page, leaving the editor mounted. */
+  .app-shell.sidebar-open { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .sidebar.expanded { position: static; width: auto; box-shadow: none; }
+  .app-shell.sidebar-open > .work-area { display: none; }
+  .sidebar.expanded .sidebar-top { justify-content: space-between; padding-inline: 8px; }
   .project-editor-layout { grid-template-columns: minmax(0, 1fr); gap: 22px; }
   .project-section-nav { position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .project-section-nav > button { min-height: 38px; font-size: 12px; }
+}
+@media screen and (max-height: 560px) {
+  .sidebar.expanded { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  .sidebar.expanded .sidebar-top { margin-bottom: 8px; }
+  .sidebar.expanded .sidebar-documents { flex: 0 0 auto; margin-top: 12px; }
+  .sidebar.expanded .sidebar-section-label { padding-top: 10px; }
+  .sidebar.expanded .document-list { overflow: visible; flex: 0 0 auto; }
+  .sidebar.expanded .sidebar-bottom { margin-top: 12px; }
 }
 @media screen and (max-width: 600px) {
   .canvas-footer.preview-controls { padding-inline: 8px; }

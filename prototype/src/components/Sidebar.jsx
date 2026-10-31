@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { IconLayoutSidebar, IconEdit, IconSearch, IconBooks, IconSettings, IconFileText, IconUserCircle, IconDeviceDesktop } from '@tabler/icons-react';
+import { IconLayoutSidebar, IconEdit, IconSearch, IconBooks, IconSettings, IconFileText, IconUserCircle, IconDeviceDesktop, IconTrash } from '@tabler/icons-react';
 import { IconButton } from './ui/index.jsx';
 import { BrandLogo } from './BrandLogo.jsx';
 
@@ -7,6 +7,7 @@ export function Sidebar({ state, theme, account, page, onHome, onToggle, onNew, 
   const [search, setSearch] = useState('');
   const expanded = state.ui.sidebar;
   const docs = state.documents.filter(d => !d.archived && (d.title + d.job.company).includes(search));
+  const trashCount = state.documents.filter(d => d.archived).length;
   const identity = account?.owner || account?.user;
   const sessionUser = !account?.owner || account?.user?.id === account.owner.id ? account?.user : null;
   const profileName = account?.owner ? state.profile?.name?.trim() : '';
@@ -19,7 +20,7 @@ export function Sidebar({ state, theme, account, page, onHome, onToggle, onNew, 
       <button className={'nav-row new-document ' + (page === 'new' ? 'active' : '')} aria-current={page === 'new' ? 'page' : undefined} aria-label="新建岗位简历" data-tooltip={!expanded ? '新建岗位简历' : undefined} onClick={onNew}><IconEdit size={21} stroke={1.65} />{expanded ? <span>新建简历</span> : null}</button>
       <button className={'nav-row ' + (['library', 'profile', 'projects'].includes(page) ? 'active' : '')} aria-current={['library', 'profile', 'projects'].includes(page) ? 'page' : undefined} aria-label="资料库" data-tooltip={!expanded ? '资料库' : undefined} onClick={() => onOpen('library')}><IconBooks size={21} stroke={1.65} />{expanded ? <span>资料库</span> : null}</button>
     </nav>
-    {expanded ? <div className="sidebar-documents"><label className="sidebar-search"><IconSearch size={15} /><input aria-label="搜索简历" placeholder="搜索简历" value={search} onChange={e => setSearch(e.target.value)} /></label><div className="sidebar-section-label">我的简历 <span>{docs.length}</span></div><div className="document-list">{docs.map(doc => <button key={doc.id} className={'document-nav ' + (!page && state.activeId === doc.id ? 'active' : '')} onClick={() => onSelect(doc.id)}><IconFileText size={17} /><span>{doc.title}<small>{doc.job.company || '未设置公司'}{doc.example ? ' · 示例' : ''}</small></span></button>)}{!docs.length ? <p className="sidebar-empty">没有找到简历</p> : null}</div></div> : <div className="rail-current"><IconButton label="返回简历编辑" className={!page ? 'active' : ''} onClick={onHome}><IconFileText size={21} stroke={1.65} /></IconButton></div>}
+    {expanded ? <div className="sidebar-documents"><label className="sidebar-search"><IconSearch size={15} /><input aria-label="搜索简历" placeholder="搜索简历" value={search} onChange={e => setSearch(e.target.value)} /></label><div className="sidebar-section-label">我的简历 <span>{docs.length}</span></div><div className="document-list">{docs.map(doc => <button key={doc.id} className={'document-nav ' + (!page && state.activeId === doc.id ? 'active' : '')} onClick={() => onSelect(doc.id)}><IconFileText size={17} /><span>{doc.title}<small>{doc.job.company || '未设置公司'}{doc.example ? ' · 示例' : ''}</small></span></button>)}{!docs.length ? <p className="sidebar-empty">{search ? "没有找到简历" : "还没有简历"}</p> : null}</div><button type="button" className="sidebar-trash" aria-current={page === "trash" ? "page" : undefined} onClick={() => onOpen("trash")}><IconTrash size={15} />回收站{trashCount ? <span>{trashCount}</span> : null}</button></div> : <div className="rail-current"><IconButton label="返回简历编辑" className={!page ? 'active' : ''} onClick={onHome}><IconFileText size={21} stroke={1.65} /></IconButton>{trashCount ? <IconButton label="回收站" className={page === "trash" ? "active" : ""} onClick={() => onOpen("trash")}><IconTrash size={20} stroke={1.65} /></IconButton> : null}</div>}
     <div className="sidebar-bottom">
       <button
         className={'nav-row sidebar-account ' + (page === 'account' ? 'active' : '')}

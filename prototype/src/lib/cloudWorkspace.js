@@ -19,6 +19,7 @@ export const canonicalJSON = (value) =>
 
 export function isPlaceholderDocument(d) {
   return (
+    !d.archived &&
     d.title === "我的简历" &&
     !Object.keys(fieldLabels).some((key) => d.resume[key]) &&
     !profileHasContent(d.resume) &&
@@ -115,7 +116,7 @@ export function mergeImportedWorkspace(
     profile: mergeProfiles(current.profile, imported.profile, makeId),
     library: [...current.library, ...imported.library],
     documents,
-    activeId: imported.documents[0]?.id || documents[0].id,
+    activeId: imported.documents.find(doc => !doc.archived)?.id || documents.find(doc => doc.id === current.activeId && !doc.archived)?.id || documents.find(doc => !doc.archived)?.id || documents[0].id,
   };
 }
 export const cloudCacheKey = (ownerId) => "luli:cloud:" + ownerId;

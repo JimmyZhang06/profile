@@ -1,24 +1,26 @@
 .profile-library-page, .profile-apply-page { --page-width: 1040px; }
-.library-navigation { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 28px; padding: 0 0 12px; border-bottom: 1px solid var(--border); }
-.library-navigation button { display: inline-flex; align-items: center; gap: 8px; padding: 10px 13px; min-height: 42px; border: 1px solid transparent; border-radius: 9px; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
-.library-navigation button.active { background: var(--surface-hover); border-color: var(--border); color: var(--text-strong); }
-.library-navigation button:hover { background: var(--surface-hover); }
-.library-navigation small { font-size: 12px; font-variant-numeric: tabular-nums; }
-.profile-form-section + .profile-form-section { margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--border-subtle); }
-.profile-form-section > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 22px; }
+.curved-tabs.library-navigation { margin-bottom: 20px; }
+.curved-tabs.library-navigation > button { flex-basis: 132px; }
+.library-tab-label { display: inline-flex; align-items: center; gap: 7px; }
+.library-tab-compact { display: none; }
+.library-tab-label small { color: var(--text-secondary); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.library-tab-panel { min-width: 0; }
+.profile-form-section + .profile-form-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-subtle); }
+.profile-form-section > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 16px; }
 .profile-form-section h2, .settings-appearance h2 { margin: 0; font-size: 18px; line-height: 1.5; font-weight: 600; }
 .profile-form-section > header p, .settings-appearance > p { margin: 6px 0 0; color: var(--text-secondary); font-size: 14px; line-height: 1.7; }
 .profile-form-section > header .button { flex-shrink: 0; }
 .profile-name-input { max-width: 430px; }
 .profile-section-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .profile-section-actions .menu-trigger { min-height: 38px; padding-inline: 10px; font-size: 13px; }
-.profile-section-actions .menu-popover { width: min(340px, 80vw); }
-.profile-section-actions .menu-popover button > span { white-space: normal; line-height: 1.6; }
+.source-copy-menu .menu-popover { width: 340px; }
 .contact-list { border-top: 1px solid var(--border-subtle); }
-.contact-row { display: grid; grid-template-columns: 154px minmax(0, 1fr) auto; column-gap: 16px; row-gap: 12px; align-items: start; padding: 20px 0; border-bottom: 1px solid var(--border-subtle); }
-.contact-row .field { min-width: 0; margin: 0; }
+.contact-row { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 10px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border-subtle); }
+.workspace-page .contact-row .field { min-width: 0; margin: 0; }
+.contact-row .select-field { margin: 0; }
+.contact-row .select-field > label, .contact-value > span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .contact-row input { min-width: 0; }
-.contact-options { display: flex; gap: 8px; align-items: center; padding-top: 26px; }
+.contact-options { display: flex; gap: 8px; align-items: center; }
 .contact-options .menu-trigger { padding: 7px; }
 .contact-options .menu-trigger > svg:last-child { display: none; }
 .contact-custom-label { grid-column: 2; max-width: 320px; }
@@ -90,8 +92,9 @@
 .resume-document .resume-contact-item > .resume-editable { min-width: 0; }
 .resume-document.template-modern .resume-contacts, .resume-document.template-editorial .resume-contacts, .resume-document.template-compact .resume-contacts { justify-content: flex-start; }
 @media (max-width: 760px) {
-  .library-navigation { gap: 5px; }
-  .library-navigation button { padding: 9px 10px; font-size: 13px; }
+  .curved-tabs.library-navigation { padding-inline: 4px; gap: 0; }
+  .curved-tabs.library-navigation > button { flex: 1 1 0; padding-inline: 1px; font-size: 13px; }
+  .library-tab-label { gap: 4px; }
   .profile-form-section > header { flex-direction: column; gap: 14px; }
   .contact-row { grid-template-columns: 128px minmax(0, 1fr); gap: 12px; }
   .contact-options { grid-column: 1 / -1; padding-top: 0; justify-content: space-between; }
@@ -105,20 +108,24 @@
   .appearance-choices button { padding: 17px; }
 }
 @media (max-width: 480px) {
-  .library-navigation button { gap: 6px; }
-  .library-navigation button > svg { display: none; }
-  .contact-row { grid-template-columns: 1fr; }
-  .contact-custom-label, .contact-options { grid-column: 1; }
+  .library-tab-full, .library-tab-label small { display: none; }
+  .library-tab-compact { display: inline; }
+  .contact-row { grid-template-columns: 116px minmax(0, 1fr); gap: 10px; }
+  .contact-row > .select-field { grid-column: 1; grid-row: 1; }
+  .contact-options { grid-column: 2; grid-row: 1; justify-content: flex-end; gap: 6px; }
+  .contact-value, .contact-custom-label { grid-column: 1 / -1; }
+  .contact-value { grid-row: 2; }
   .contact-start, .profile-section-actions { flex-wrap: wrap; }
   .profile-footer-actions { width: 100%; }
   .profile-footer-actions > .button { flex: 1; padding-inline: 10px; font-size: 13px; }
   .profile-record-summary { align-items: flex-start; }
   .record-bottom-actions { align-items: flex-start; }
 }
+@media (max-width: 380px) {
+  .library-tab-compact > span { display: block; line-height: 1.4; }
+  .contact-row { grid-template-columns: 96px minmax(0, 1fr); gap: 8px; }
+  .contact-options .profile-checkbox { font-size: 12px; gap: 5px; }
+  .contact-options { gap: 3px; }
+}
 @media (prefers-reduced-motion: reduce) { .profile-record-summary > button > svg { transition: none; } }
 @media print { .resume-record { break-inside: auto; } .resume-record-heading { break-after: avoid; } }
-
-@media screen and (min-width: 761px) and (max-width: 1180px) {
-  .app-shell.has-page.sidebar-open { grid-template-columns: 216px minmax(0, 1fr); }
-  .app-shell.has-page .sidebar.expanded { position: static; width: auto; box-shadow: none; }
-}

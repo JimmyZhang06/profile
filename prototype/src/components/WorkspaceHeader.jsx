@@ -1,4 +1,4 @@
-import { IconArrowBackUp, IconArrowForwardUp, IconBooks, IconBriefcase2, IconCheck, IconDownload, IconFileText, IconHistory, IconMessageCircle, IconPencil, IconTypography } from '@tabler/icons-react';
+import { IconArrowBackUp, IconArrowForwardUp, IconBooks, IconBriefcase2, IconCheck, IconDownload, IconFileText, IconHistory, IconMessageCircle, IconPencil, IconTypography, IconTrash } from '@tabler/icons-react';
 import { Button, IconButton, Menu } from './ui/index.jsx';
 import { proposalState } from '../lib/workspace.js';
 
@@ -16,6 +16,9 @@ export function WorkspaceHeader({ doc, saveState, edit, mobileView, onMobileView
           { label: '重命名简历', icon: <IconPencil size={17} />, onClick: () => onOpen('rename') },
           { label: '版本记录', icon: <IconHistory size={17} />, onClick: () => onOpen('versions') },
           { label: pending ? `修改记录 · ${pending} 条待审核` : '修改记录', icon: <IconMessageCircle size={17} />, onClick: () => onOpen('review') },
+          { separator: true },
+          { label: '删除简历', icon: <IconTrash size={17} />, onClick: () => onOpen('delete') },
+          { label: '回收站', icon: <IconArrowBackUp size={17} />, onClick: () => onOpen('trash') },
         ]} />
         <span className={'save-status ' + saveState} role="status" aria-label={saveLabel} title={saveLabel}>{saveState === 'saved' ? <IconCheck size={14} /> : saveState === 'synced' ? <><IconCheck size={14} /><span>已同步</span></> : saveLabel}</span>
       </div>

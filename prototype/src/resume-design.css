@@ -65,7 +65,9 @@
   .canvas-body { flex: 1; min-height: 0; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
   .canvas-body > .paper-scroll { min-width: 0; min-height: 0; overflow: auto; scrollbar-width: none; container-type: inline-size; container-name: resume-paper; }
   .reading-mode .resume-page.resume-document { --resume-reading-scale: inherit; position: relative; width: 100%; min-height: 0; padding: clamp(22px, 5cqi, var(--resume-margin)); font-size: calc(var(--resume-body-size) * var(--resume-reading-scale)); line-height: var(--resume-line-height); }
-  .canvas-panel .richtext-editor { padding: 12px 18px; background: var(--surface-card); max-height: min(46vh, 370px); overflow: auto; scrollbar-width: none; }
+  .canvas-panel .richtext-editor { display: flex; flex-direction: column; min-height: 0; padding: 12px 18px; background: var(--surface-card); max-height: min(60dvh, 370px); overflow: hidden; }
+  .richtext-heading, .richtext-toolbar, .richtext-editor .inline-editor-actions { flex-shrink: 0; }
+  .richtext-content { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
   .richtext-heading { display: flex; gap: 10px; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 9px; }
   .richtext-heading > span { color: var(--text-muted); font-size: 12px; }
   .richtext-toolbar { display: flex; align-items: center; gap: 3px; padding: 4px; border: 1px solid var(--border); border-bottom: 0; border-radius: 9px 9px 0 0; background: var(--surface-subtle); }
@@ -73,7 +75,7 @@
   .richtext-toolbar .icon-button[aria-pressed="true"] { background: var(--action-bg); color: var(--action-fg); }
   .format-divider { height: 16px; width: 1px; background: var(--border); margin: 0 5px; }
   .richtext-history { display: flex; margin-left: auto; gap: 2px; }
-  .richtext-input { min-height: 86px; max-height: 150px; overflow: auto; scrollbar-width: none; border: 1px solid var(--border); border-radius: 0 0 9px 9px; background: var(--field-bg); color: var(--text-primary); padding: 11px 13px; font-size: 16px; line-height: 1.75; overflow-wrap: anywhere; font-synthesis: weight style; }
+  .richtext-input { min-height: 0; max-height: 150px; flex: 1 1 auto; overflow: auto; scrollbar-width: none; border: 1px solid var(--border); border-radius: 0 0 9px 9px; background: var(--field-bg); color: var(--text-primary); padding: 11px 13px; font-size: 16px; line-height: 1.75; overflow-wrap: anywhere; font-synthesis: weight style; }
   .richtext-input:focus { outline: 1px solid var(--focus-ring); outline-offset: -1px; }
   .richtext-input p { margin: 0; }
   .richtext-input p + p { margin-top: 6px; }
@@ -109,6 +111,14 @@
   .workspace-actions { gap: 2px; }
   .workspace-document { min-width: 0; }
   .canvas-panel .richtext-editor { padding: 10px 12px; }
+  .richtext-editor .inline-editor-actions > span { display: none; }
+  .richtext-editor .inline-editor-actions { justify-content: flex-end; }
+}
+@media screen and (max-height: 520px) {
+  .canvas-panel .richtext-editor { max-height: min(64dvh, calc(100% - 92px)); padding-block: 8px; }
+  .richtext-heading { margin-bottom: 6px; }
+  .richtext-heading > span { display: none; }
+  .canvas-panel .richtext-editor .inline-editor-actions { margin-top: 6px; }
 }
 @media print {
   .resume-design-panel, .editor-loading { display: none !important; }

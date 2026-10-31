@@ -39,7 +39,7 @@ export default function RichTextEditor({ label, value, marks, onChange, onSave, 
         <IconButton label="重做文字编辑" disabled={!active?.redo} onMouseDown={e => e.preventDefault()} onClick={() => editor?.chain().focus().redo().run()}><IconArrowForwardUp size={16} /></IconButton>
       </span>
     </div>
-    <EditorContent editor={editor} />
+    <EditorContent className="richtext-content" editor={editor} />
     <div className="inline-editor-actions"><span>Ctrl / ⌘ Enter 保存</span><Button variant="ghost" onClick={onCancel}>取消</Button><Button disabled={!editor} onClick={onSave}>保存修改<IconCheck size={15} /></Button></div>
   </section>;
 }

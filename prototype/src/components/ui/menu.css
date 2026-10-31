@@ -1,0 +1,21 @@
+/* Render outside scrolling panels; the menu owns its viewport-bounded scroll. */
+.menu-layer .menu-popover {
+  z-index: 150;
+  width: 220px;
+  min-width: 0;
+  max-width: calc(100vw - 16px);
+  margin: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  animation: none;
+}
+.menu-layer .menu-popover::-webkit-scrollbar { display: none; }
+.menu-layer .menu-popover > button { min-width: 0; }
+.menu-layer .menu-popover > button > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.6; }
+.menu-layer .menu-popover > button > svg, .menu-layer .menu-popover > button > kbd { flex-shrink: 0; }
+.menu-layer:is(.preview-size-menu, .preview-scale-menu) .menu-popover { width: 182px; }
+.menu-layer:is(.preview-size-menu, .preview-scale-menu) .menu-popover > button { padding: 9px 10px; font-size: 13px; }
+.menu-layer.material-item-menu .menu-popover { width: 190px; }
+.menu-layer.source-copy-menu .menu-popover { width: 340px; }
+@media print { .menu-layer { display: none !important; } }

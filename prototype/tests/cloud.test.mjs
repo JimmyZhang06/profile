@@ -15,6 +15,7 @@ import { registerCloudAdapter } from "../server/cloud/models.mjs";
 import { initialWorkspace, validWorkspace } from "../src/lib/workspace.js";
 import { selectImport } from "../src/lib/cloudWorkspace.js";
 import { getResumeDesign, releaseDesign } from "../src/lib/resumeDesign.js";
+import { activeDocument, moveDocumentToTrash, restoreDocument } from '../src/lib/documents.js';
 
 test("account, workspace and administration enforce real session and ownership boundaries", async (t) => {
   const mailbox = new Map();
@@ -660,6 +661,28 @@ test("account, workspace and administration enforce real session and ownership b
       );
     },
   );
+  await t.test('deleted resumes survive cloud round trips and restore with drafts and history intact', async () => {
+    const before = (await bob.request('cloud/workspace')).data;
+    const id = before.state.activeId;
+    before.state.documents.find(doc => doc.id === id).composer = '未发送的虚构草稿';
+    const deleted = before.state.documents.reduce((state, doc) => moveDocumentToTrash(state, doc.id, 1700000000000), before.state);
+    const saved = await bob.request('cloud/workspace', 'PUT', {state: deleted, revision: before.revision, mutationId: 'trash-roundtrip'});
+    assert.equal(saved.status, 200);
+    const remote = (await bob.request('cloud/workspace')).data;
+    assert(validWorkspace(remote.state));
+    assert.equal(activeDocument(remote.state), null);
+    assert(remote.state.documents.every(doc => doc.archived));
+    const restored = restoreDocument(remote.state, id);
+    assert.equal((await bob.request('cloud/workspace', 'PUT', {state: restored, revision: remote.revision, mutationId: 'restore-roundtrip'})).status, 200);
+    const after = (await bob.request('cloud/workspace')).data;
+    const document = activeDocument(after.state), original = before.state.documents.find(doc => doc.id === id);
+    assert.equal(document.id, id);
+    assert.equal(document.composer, original.composer);
+    assert.deepEqual(document.resume, original.resume);
+    assert.deepEqual(document.messages, original.messages);
+    assert.deepEqual(document.versions, original.versions);
+    assert.deepEqual(after.state.library, before.state.library);
+  });
   await t.test(
     "revocation and disabled accounts take effect on the next request",
     async () => {

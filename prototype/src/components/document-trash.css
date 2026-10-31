@@ -1,0 +1,25 @@
+.document-delete-summary { display: flex; align-items: flex-start; gap: 16px; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-subtle); }
+.document-delete-summary > svg, .document-trash-item > svg { flex-shrink: 0; color: var(--text-secondary); margin-top: 4px; }
+.document-delete-summary > div, .document-trash-item > div { flex: 1; min-width: 0; }
+.document-delete-summary h2, .document-trash-item h2 { margin: 0; font-size: 17px; line-height: 1.6; overflow-wrap: anywhere; }
+.document-delete-summary p, .document-trash-item p { margin: 5px 0; color: var(--text-secondary); font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.document-delete-summary small, .document-trash-item small { display: block; color: var(--text-muted); line-height: 1.8; font-size: 12px; }
+.document-trash-note { font-size: 14px; line-height: 1.8; color: var(--text-secondary); margin: 22px 0; }
+.document-trash-search input { min-width: 0; width: 100%; }
+.document-trash-count { color: var(--text-secondary); font-size: 13px; margin-block: 18px 8px; }
+.document-trash-item { display: flex; gap: 16px; align-items: center; padding: 22px 0; border-bottom: 1px solid var(--border-subtle); }
+.document-trash-item .button { flex-shrink: 0; font-size: 13px; }
+.empty-documents { flex: 1; min-height: 0; overflow: auto; padding: clamp(40px, 12vh, 110px) 24px 32px; text-align: center; }
+.empty-documents > .brand-mark { width: 46px; height: 46px; }
+.empty-documents h1 { font-size: clamp(22px, 3vw, 28px); line-height: 1.6; margin: 24px 0 10px; }
+.empty-documents p { color: var(--text-secondary); font-size: 15px; line-height: 1.8; }
+.empty-documents > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 28px; }
+.sidebar-trash { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 12px; border-radius: 8px; font-size: 12px; color: var(--text-secondary); flex-shrink: 0; text-align: left; }
+.sidebar-trash > span { margin-left: auto; }
+.sidebar-trash:hover, .sidebar-trash[aria-current="page"] { background: var(--surface-hover); }
+@media (max-width: 600px) {
+  .document-trash-item { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px 12px; align-items: start; }
+  .document-trash-item > .button { grid-column: 2; justify-self: start; }
+  .document-delete-summary { padding: 17px; gap: 12px; }
+}
+@media print { .empty-documents { display: none !important; } }

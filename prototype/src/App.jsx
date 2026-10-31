@@ -8,6 +8,7 @@ import { WorkspaceHeader } from './components/WorkspaceHeader.jsx';
 import { SplitWorkspace } from './components/SplitWorkspace.jsx';
 import { JobPage, NewDocumentPage, SettingsPage, VersionsPage, ReviewPage, SourcePage, ExportPage, RenamePage } from './components/Pages.jsx';
 import { LibraryPage } from './components/LibraryPage.jsx';
+import { DeleteDocumentPage, DocumentTrashPage, EmptyDocuments } from './components/DocumentTrash.jsx';
 import { Button, IconButton } from './components/ui/index.jsx';
 import { AccountPage } from './components/account/AccountPage.jsx';
 import { cloudRequest } from './lib/cloudClient.js';
@@ -21,24 +22,27 @@ import { marksForField } from './lib/richText.js';
 import { mergeImportedWorkspace } from './lib/cloudWorkspace.js';
 import { applyProfileSelection } from './lib/profile.js';
 import { getResumeDesign } from './lib/resumeDesign.js';
+import { activeDocument, moveDocumentToTrash, restoreDocument } from './lib/documents.js';
 
 export function App({ workspace, account }) {
   const theme = useTheme();
   const { state, setState, saveState, error, conflict } = workspace;
   const [catalog, setCatalog] = useState(null);
-  const doc = state.documents.find(d => d.id === state.activeId) || state.documents[0];
+  const [emptyDoc] = useState(() => ({...makeDocument(), title: '尚未创建简历'}));
+  const currentDoc = activeDocument(state), doc = currentDoc || emptyDoc;
   const { page, pending, registerDirty, request, navigate, finish, discard, stay } = usePageNavigation();
   const [selected, setSelected] = useState(null), [edit, setEdit] = useState(null), [focus, setFocus] = useState(false), [mobileView, setMobileView] = useState('chat'), [busyId, setBusyId] = useState(null), [toast, setToast] = useState(''), [focusKey, setFocusKey] = useState(0);
   const [designOpen, setDesignOpen] = useState(false);
   const task = useRef(null), timer = useRef(null), workArea = useRef(null), latest = useRef(state);
   latest.current = state;
   const enabled = state.settings.enabled && state.settings.capabilities.rewrite;
-  const updateDoc = (id, change) => setState(s => ({ ...s, documents: s.documents.map(d => d.id === id ? change(d) : d) }));
+  const updateDoc = (id, change) => setState(s => ({ ...s, documents: s.documents.map(d => d.id === id && !d.archived ? change(d) : d) }));
   const changeDoc = change => updateDoc(doc.id, change);
   function notify(message) { clearTimeout(timer.current); setToast(message); timer.current = setTimeout(() => setToast(''), 4200); }
   function guard() { if (edit) { notify('请先保存或取消正在编辑的文字'); return false; } if (conflict) return false; return true; }
   function open(name) {
     if (!guard() || name === page) return;
+    if (!currentDoc && ['job', 'versions', 'review', 'source', 'export', 'rename', 'delete'].includes(name)) name = 'new';
     request(() => {
       finish(name);
       if (window.matchMedia('(max-width: 1180px)').matches) setState(s => ({ ...s, ui: { ...s.ui, sidebar: false } }));
@@ -53,7 +57,7 @@ export function App({ workspace, account }) {
   useEffect(() => { if(workspace.cloud&&saveState==='expired')account.refresh(); }, [workspace.cloud,saveState]);
   const previousPage = useRef(null);
   useEffect(() => {
-    const titles = { account: '账号与安全', library: '资料库', projects: '资料库', job: '目标岗位', profile: '资料库', new: '新建简历', settings: '设置', versions: '版本记录', review: '修改记录', source: '原始依据', export: '导出简历', rename: '重命名简历' };
+    const titles = { account: '账号与安全', library: '资料库', projects: '资料库', job: '目标岗位', profile: '资料库', new: '新建简历', settings: '设置', versions: '版本记录', review: '修改记录', source: '原始依据', export: '导出简历', rename: '重命名简历', delete: '删除简历', trash: '回收站' };
     document.title = page ? titles[page] + ' · 履历' : '履历 · 简历工作空间';
     if (previousPage.current && !page) workArea.current?.querySelector('.document-title-menu button')?.focus({ preventScroll: true });
     previousPage.current = page;
@@ -97,8 +101,20 @@ export function App({ workspace, account }) {
     } finally { writer.dispose(); if (task.current?.controller === controller) { task.current = null; setBusyId(null); } }
   }
   function selectDocument(id) {
+    if (!guard() || !state.documents.some(d => d.id === id && !d.archived)) return;
+    request(() => { stop(); setState(s => ({ ...s, activeId: id, ui: {...s.ui, sidebar: window.matchMedia('(max-width: 760px)').matches ? false : s.ui.sidebar} })); setSelected(null); setEdit(null); setFocus(false); setMobileView('chat'); finish(null); });
+  }
+  function trashCurrentDocument() {
+    if (!currentDoc || !guard()) return;
+    stop(); setState(s => moveDocumentToTrash(s, doc.id));
+    setSelected(null); setEdit(null); setFocus(false); setDesignOpen(false); setMobileView('chat'); finish(null);
+    notify('已移入回收站，可随时恢复');
+  }
+  function restoreDeletedDocument(id) {
     if (!guard()) return;
-    request(() => { stop(); setState(s => ({ ...s, activeId: id })); setSelected(null); setEdit(null); setFocus(false); setMobileView('chat'); finish(null); });
+    stop(); setState(s => restoreDocument(s, id));
+    setSelected(null); setEdit(null); setFocus(false); setDesignOpen(false); setMobileView('chat'); finish(null);
+    notify('简历已恢复，正文、对话和版本记录均保留');
   }
   function selectField(field) { if (!guard()) return; setSelected(field); }
   function startEdit(field) { if (!guard()) return; const value = fieldValue(doc.resume, field); setSelected(field); setEdit({ field, value, marks: marksForField(doc.resume, field, value) }); }
@@ -153,21 +169,24 @@ export function App({ workspace, account }) {
     }
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, [edit, conflict, page]);
-  return <PageNavigationContext.Provider value={{ registerDirty, request, stay, documentTitle: doc.title }}><main className={'app-shell ' + (page ? 'has-page ' : '') + (state.ui.sidebar ? 'sidebar-open ' : '')}>
+  return <PageNavigationContext.Provider value={{ registerDirty, request, stay, documentTitle: currentDoc?.title || '' }}><main className={'app-shell ' + (page ? 'has-page ' : '') + (state.ui.sidebar ? 'sidebar-open ' : '')}>
     <Sidebar theme={theme} account={account} state={state} page={page} onHome={() => { if (guard()) navigate(null); }} onToggle={() => setState(s => ({ ...s, ui: { ...s.ui, sidebar: !s.ui.sidebar } }))} onNew={() => open('new')} onOpen={open} onSelect={selectDocument} />
     <div className={'work-area mobile-' + mobileView + (focus ? ' canvas-focused' : '')} ref={workArea}>
       {(error || conflict) ? <div className={'workspace-alert' + (workspace.remoteConflict ? ' sync-conflict' : '')} role="alert"><span>{workspace.remoteConflict ? '另一台设备修改了资料。双方内容已保留，请选择如何继续。' : conflict ? '另一窗口更新了这份工作空间。请重新载入后继续。' : error}</span>{workspace.remoteConflict ? <><div className="sync-conflict-versions"><div><strong>这台设备</strong><p>{state.documents.length} 份简历 · {state.library.length} 个项目</p><small>{state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div><div><strong>云端版本 {workspace.remoteConflict.revision}</strong><p>{workspace.remoteConflict.state.documents.length} 份简历 · {workspace.remoteConflict.state.library.length} 个项目</p><small>{workspace.remoteConflict.state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div></div><Button onClick={()=>workspace.resolveConflict('both')}>两个版本都保留</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('local')}>继续使用本机版本</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('cloud')}>使用云端版本</Button></> : null}<Button variant="secondary" onClick={() => downloadFile('履历恢复备份.json', JSON.stringify(state), 'application/json')}>导出当前内容</Button>{conflict && !workspace.cloud ? <Button onClick={() => window.location.reload()}>重新载入</Button> : null}{workspace.cloud && !conflict ? <Button onClick={()=>saveState==='expired'?open('account'):workspace.retry()}>{saveState==='expired'?'重新登录':'重试同步'}</Button> : null}</div> : null}
       {pending ? <div className="page-leave-notice" role="alert"><span>当前页面还有未保存的内容。</span><Button variant="secondary" onClick={stay}>继续编辑</Button><Button variant="ghost" onClick={discard}>放弃更改并离开</Button></div> : null}
-      <div className="editor-workspace" hidden={!!page} inert={conflict || undefined}>
+      {!page && !currentDoc ? <EmptyDocuments onNew={() => open('new')} onTrash={() => open('trash')} count={state.documents.filter(d => d.archived).length} /> : null}
+      <div className="editor-workspace" hidden={!!page || !currentDoc} inert={conflict || undefined}>
       <WorkspaceHeader doc={doc} saveState={saveState} edit={edit} mobileView={mobileView} onMobileView={view => { if (view === 'chat') setDesignOpen(false); setMobileView(view); }} onOpen={open} onUndo={() => changeDoc(d => undoDocument(d))} onRedo={() => changeDoc(d => undoDocument(d, true))} designOpen={designOpen} onDesignToggle={() => { if (designOpen) closeDesign(); else if (guard()) { setDesignOpen(true); setMobileView('document'); } }} />
       <SplitWorkspace ratio={state.ui.chatRatio} onRatioChange={chatRatio => setState(s => ({ ...s, ui: { ...s.ui, chatRatio } }))} inert={conflict || undefined} tools={designOpen ? <ResumeDesignPanel catalog={catalog} resume={doc.resume} disabled={!!edit} onChange={changeDesign} onClose={closeDesign} /> : null}>
-        <Chat active={!page && !designOpen} doc={doc} settings={state.settings} selected={selected} busy={busyId === doc.id} focusKey={focusKey} onSend={send} onStop={stop} onInput={text => changeDoc(d => ({ ...d, composer: text }))} onRemoveSelection={() => selectField(null)} onOpen={open} onApply={apply} onDismiss={(id, proposalId) => changeDoc(d => ({ ...d, messages: d.messages.map(m => m.id === id ? { ...m, dismissed: [...(m.dismissed || []), proposalId] } : m) }))} onSource={field => { if (guard()) { setSelected(field); finish('source'); } }} onLocate={locate} onCopy={copy} onRetry={retryMessage} onModel={changeModel} />
-        <Canvas active={!page} doc={doc} selected={selected} edit={edit} onSelect={selectField} onEdit={startEdit} onEditChange={draft => setEdit(e => ({ ...e, ...draft }))} onSaveEdit={saveEdit} onCancelEdit={() => setEdit(null)} onAsk={field => { setSelected(field); setDesignOpen(false); setFocus(false); setMobileView('chat'); setFocusKey(k => k + 1); }} onSource={field => { setSelected(field); open('source'); }} onOpen={open} focus={focus} onFocus={() => setFocus(!focus)} enabled={enabled} designOpen={designOpen} />
+        <Chat active={!page && !!currentDoc && !designOpen} doc={doc} settings={state.settings} selected={selected} busy={busyId === doc.id} focusKey={focusKey} onSend={send} onStop={stop} onInput={text => changeDoc(d => ({ ...d, composer: text }))} onRemoveSelection={() => selectField(null)} onOpen={open} onApply={apply} onDismiss={(id, proposalId) => changeDoc(d => ({ ...d, messages: d.messages.map(m => m.id === id ? { ...m, dismissed: [...(m.dismissed || []), proposalId] } : m) }))} onSource={field => { if (guard()) { setSelected(field); finish('source'); } }} onLocate={locate} onCopy={copy} onRetry={retryMessage} onModel={changeModel} />
+        <Canvas active={!page && !!currentDoc} doc={doc} selected={selected} edit={edit} onSelect={selectField} onEdit={startEdit} onEditChange={draft => setEdit(e => ({ ...e, ...draft }))} onSaveEdit={saveEdit} onCancelEdit={() => setEdit(null)} onAsk={field => { setSelected(field); setDesignOpen(false); setFocus(false); setMobileView('chat'); setFocusKey(k => k + 1); }} onSource={field => { setSelected(field); open('source'); }} onOpen={open} focus={focus} onFocus={() => setFocus(!focus)} enabled={enabled} designOpen={designOpen} />
       </SplitWorkspace>
       </div>
       <div className="workspace-page-host" hidden={!page} inert={conflict || undefined}>
     {page === 'account' ? <AccountPage account={account} workspace={workspace} onBack={()=>navigate(null)}/> : null}
-    {['library', 'profile', 'projects'].includes(page) ? <LibraryPage key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{busy: !!busyId, settings: state.settings, onOpenJob: () => open('job'), onConfigure: () => open('settings'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}
+    {page === 'delete' && currentDoc ? <DeleteDocumentPage doc={doc} onBack={() => navigate(null)} onConfirm={trashCurrentDocument} /> : null}
+    {page === 'trash' ? <DocumentTrashPage documents={state.documents} onBack={() => navigate(null)} onRestore={restoreDeletedDocument} /> : null}
+    {['library', 'profile', 'projects'].includes(page) ? <LibraryPage hasActiveDocument={!!currentDoc} key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{hasActiveDocument: !!currentDoc, busy: !!busyId, settings: state.settings, onOpenJob: () => open('job'), onConfigure: () => open('settings'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}
     {page === 'job' ? <JobPage job={doc.job} onBack={() => navigate(null)} onSave={(job, next = null) => { stop(); changeDoc(d => ({ ...d, job, title: d.title === d.job.title + ' · 定向简历' ? job.title + ' · 定向简历' : d.title, resume: { ...d.resume, target: d.resume.target === d.job.title ? job.title : d.resume.target }, updatedAt: Date.now() })); finish(next); notify('目标岗位已更新'); }} /> : null}
     {page === 'new' ? <NewDocumentPage profile={state.profile} library={state.library} onBack={() => navigate(null)} onCreate={(job, projects, personalProfile) => { stop(); const next = makeDocument({ job, projects, profile: personalProfile || state.profile }); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); finish(null); setSelected(null); setFocus(false); setMobileView('chat'); notify('新简历已创建'); }} /> : null}
     {page === 'settings' ? <SettingsPage theme={theme} modelServiceAvailable={account?.health?.cloudEnabled !== false && (account?.health?.mode !== 'production' || workspace.cloud)} cloudAccount={workspace.cloud ? account.owner.id : null} state={state} onBack={() => navigate(null)} onSave={settings => { stop(); setState(s => ({ ...s, settings })); finish(null); notify('设置已保存'); }} notify={notify} onImport={importBackup} /> : null}
