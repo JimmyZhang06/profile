@@ -4,6 +4,7 @@ import { fieldLabel, fieldValue } from '../lib/workspace.js';
 import { getProjectBullets } from '../lib/projects.js';
 import { getResumeDesign, resumeDesignStyle } from '../lib/resumeDesign.js';
 import { marksForField, textSegments } from '../lib/richText.js';
+import { contactLabel, visibleContacts, visibleRecords } from '../lib/profile.js';
 
 function FormattedText({ text, marks }) {
   let offset = 0;
@@ -30,13 +31,21 @@ function Editable({ field, label, resume, selected, onSelect, onEdit, as = 'p', 
 function Section({ title, className = '', children }) {
   return <section className={'resume-section ' + className}><h2>{title}</h2><div className="resume-section-body">{children}</div></section>;
 }
+function Records({ section, title, className, props }) {
+  const entries = visibleRecords(props.resume, section);
+  if (!entries.length) return null;
+  return <Section title={title} className={className}>{entries.map(entry => <div className="resume-record" key={entry.id}>
+    <div className="resume-line"><div className="resume-record-heading"><Editable {...props} field={entry.id + ':organization'} as="h3" placeholder="补充名称" />{entry.title ? <Editable {...props} field={entry.id + ':title'} className="resume-record-role" /> : null}</div>{entry.period ? <Editable {...props} field={entry.id + ':period'} className="resume-date" /> : null}</div>
+    {entry.description ? <Editable {...props} field={entry.id + ':description'} /> : null}
+  </div>)}</Section>;
+}
 export const ResumeDocument = forwardRef(function ResumeDocument({ resume: r, selected, onSelect, onEdit, onOpen, readOnly = false, style, className = '' }, ref) {
   const design = getResumeDesign(r), props = { resume: r, selected, onSelect, onEdit, readOnly };
   return <article ref={ref} className={`resume-page resume-document template-${design.template} font-${design.font} ${className}`} style={{ ...resumeDesignStyle(r), ...style }} aria-label={readOnly ? undefined : '简历预览'}>
     <header className="resume-intro">
       <Editable {...props} field="name" as="h1" placeholder="你的姓名" />
       <Editable {...props} field="target" className="resume-target" placeholder="求职方向" />
-      <Editable {...props} field="contact" className="resume-contact" placeholder="联系方式 / 城市" />
+      {Array.isArray(r.contactItems) ? <div className="resume-contact resume-contacts">{visibleContacts(r).map(item => <span className="resume-contact-item" key={item.id}>{item.label ? <span>{item.label}：</span> : null}<Editable {...props} field={item.id + ':value'} label={contactLabel(item)} as="span" /></span>)}</div> : <Editable {...props} field="contact" className="resume-contact" placeholder="联系方式 / 城市" />}
     </header>
     <div className="resume-columns">
       <div className="resume-main">
@@ -48,16 +57,17 @@ export const ResumeDocument = forwardRef(function ResumeDocument({ resume: r, se
           </div> : null; })}
           {!r.projectIds.length && !readOnly ? <button className="empty-projects" onClick={() => onOpen('projects')}><IconPlus size={18} />从素材库添加经历</button> : null}
         </Section>
-        <Section title="工作经历" className="resume-experience-section">
+        <Records section="researchEntries" title="研究经历" className="resume-research-section" props={props} />
+        {Array.isArray(r.workEntries) ? <Records section="workEntries" title="实习与工作经历" className="resume-experience-section" props={props} /> : <Section title="工作经历" className="resume-experience-section">
           <div className="resume-line"><Editable {...props} field="company" as="h3" placeholder="公司 / 职位" /><Editable {...props} field="period" className="resume-date" placeholder="起止时间" /></div>
           <Editable {...props} field="experience" placeholder="概述你的职责范围与工作成果" />
-        </Section>
+        </Section>}
       </div>
       <div className="resume-aside">
-        <Section title="教育背景" className="resume-education-section">
+        {Array.isArray(r.educationEntries) ? <Records section="educationEntries" title="教育背景" className="resume-education-section" props={props} /> : <Section title="教育背景" className="resume-education-section">
           <div className="resume-line"><Editable {...props} field="school" as="h3" placeholder="学校名称" /><Editable {...props} field="educationPeriod" className="resume-date" placeholder="起止时间" /></div>
           <Editable {...props} field="major" placeholder="专业与学历" />
-        </Section>
+        </Section>}
         <Section title="专业能力" className="resume-skills-section"><Editable {...props} field="skills" placeholder="写下与岗位相关的能力、工具或证书" /></Section>
       </div>
     </div>

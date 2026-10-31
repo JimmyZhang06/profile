@@ -6,7 +6,8 @@ import { Canvas } from './components/Canvas.jsx';
 import { ResumeDesignPanel } from './components/ResumeDesignPanel.jsx';
 import { WorkspaceHeader } from './components/WorkspaceHeader.jsx';
 import { SplitWorkspace } from './components/SplitWorkspace.jsx';
-import { ProjectsPage, JobPage, ProfilePage, NewDocumentPage, SettingsPage, VersionsPage, ReviewPage, SourcePage, ExportPage, RenamePage } from './components/Pages.jsx';
+import { JobPage, NewDocumentPage, SettingsPage, VersionsPage, ReviewPage, SourcePage, ExportPage, RenamePage } from './components/Pages.jsx';
+import { LibraryPage } from './components/LibraryPage.jsx';
 import { Button, IconButton } from './components/ui/index.jsx';
 import { AccountPage } from './components/account/AccountPage.jsx';
 import { cloudRequest } from './lib/cloudClient.js';
@@ -16,7 +17,9 @@ import { acceptedProposal, clone, downloadFile, fieldLabel, fieldValue, makeDocu
 import { runAssistant } from './lib/assistant.js';
 import { createTypewriter } from './lib/typewriter.js';
 import { prepareProjectSelection } from './lib/projects.js';
-import { marksForField, remapTextStyles } from './lib/richText.js';
+import { marksForField } from './lib/richText.js';
+import { mergeImportedWorkspace } from './lib/cloudWorkspace.js';
+import { applyProfileSelection } from './lib/profile.js';
 import { getResumeDesign } from './lib/resumeDesign.js';
 
 export function App({ workspace, account }) {
@@ -50,7 +53,7 @@ export function App({ workspace, account }) {
   useEffect(() => { if(workspace.cloud&&saveState==='expired')account.refresh(); }, [workspace.cloud,saveState]);
   const previousPage = useRef(null);
   useEffect(() => {
-    const titles = { account: '账号与安全', projects: '项目素材', job: '目标岗位', profile: '个人资料', new: '新建简历', settings: 'AI 与设置', versions: '版本记录', review: '修改记录', source: '原始依据', export: '导出简历', rename: '重命名简历' };
+    const titles = { account: '账号与安全', library: '资料库', projects: '资料库', job: '目标岗位', profile: '资料库', new: '新建简历', settings: '设置', versions: '版本记录', review: '修改记录', source: '原始依据', export: '导出简历', rename: '重命名简历' };
     document.title = page ? titles[page] + ' · 履历' : '履历 · 简历工作空间';
     if (previousPage.current && !page) workArea.current?.querySelector('.document-title-menu button')?.focus({ preventScroll: true });
     previousPage.current = page;
@@ -130,11 +133,16 @@ export function App({ workspace, account }) {
   function changeModel(id) { stop(); setState(s => ({ ...s, settings: { ...s.settings, enabled: true, capabilities: { ...s.settings.capabilities, rewrite: true }, bindings: { ...s.settings.bindings, rewrite: id } } })); }
   function importBackup(backup) {
     if (!validWorkspace(backup)) throw new Error('不是可识别的履历备份文件');
-    const mappings = new Map(backup.library.map(p => [p.id, uid()]));
-    const mapId = id => { if (!mappings.has(id)) mappings.set(id, uid()); return mappings.get(id); };
-    const mapResume = r => ({ ...r, sources: r.sources.map(p => ({ ...p, id: mapId(p.id) })), projectIds: r.projectIds.map(mapId), ...(r.projectBullets ? { projectBullets: Object.fromEntries(Object.entries(r.projectBullets).map(([id, points]) => [mapId(id), points])) } : {}), textStyles: remapTextStyles(r.textStyles, mapId), overrides: Object.fromEntries(Object.entries(r.overrides).map(([field, value]) => { const [id, i] = field.split(':'); return [mapId(id) + ':' + i, value]; })) });
-    const documents = backup.documents.map(d => ({ ...clone(d), id: uid(), title: d.title + '（导入）', resume: mapResume(d.resume), messages: [], undo: [], redo: [], versions: d.versions.map(v => ({ ...v, id: uid(), resume: mapResume(v.resume) })) }));
-    setState(s => ({ ...s, library: [...s.library, ...backup.library.map(p => ({ ...p, id: mapId(p.id) }))], documents: [...s.documents, ...documents] })); notify('备份已导入，现有内容保持不变');
+    const incoming = {...clone(backup), documents: backup.documents.map(d => ({...clone(d), title: d.title + '（导入）'}))};
+    setState(s => mergeImportedWorkspace(s, incoming)); notify('备份已导入，资料已合并，现有简历保持不变');
+  }
+  function saveProfile(profile, expected) {
+    if (JSON.stringify(latest.current.profile) !== expected) {notify('资料已更新，请先载入最新内容'); return false;}
+    setState(s => ({...s, profile})); return true;
+  }
+  function applyProfile(profile, selection, groups) {
+    stop(); changeDoc(d => mutateResume(d, applyProfileSelection(d.resume, profile, selection, groups), '从资料库更新简历'));
+    setSelected(null); finish(null); setMobileView('document'); notify('所选资料已更新到当前简历，可以撤销');
   }
   useEffect(() => {
     function key(event) {
@@ -145,7 +153,7 @@ export function App({ workspace, account }) {
     }
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, [edit, conflict, page]);
-  return <PageNavigationContext.Provider value={{ registerDirty, request, stay, documentTitle: doc.title }}><main className={'app-shell ' + (state.ui.sidebar ? 'sidebar-open ' : '')}>
+  return <PageNavigationContext.Provider value={{ registerDirty, request, stay, documentTitle: doc.title }}><main className={'app-shell ' + (page ? 'has-page ' : '') + (state.ui.sidebar ? 'sidebar-open ' : '')}>
     <Sidebar theme={theme} account={account} state={state} page={page} onHome={() => { if (guard()) navigate(null); }} onToggle={() => setState(s => ({ ...s, ui: { ...s.ui, sidebar: !s.ui.sidebar } }))} onNew={() => open('new')} onOpen={open} onSelect={selectDocument} />
     <div className={'work-area mobile-' + mobileView + (focus ? ' canvas-focused' : '')} ref={workArea}>
       {(error || conflict) ? <div className={'workspace-alert' + (workspace.remoteConflict ? ' sync-conflict' : '')} role="alert"><span>{workspace.remoteConflict ? '另一台设备修改了资料。双方内容已保留，请选择如何继续。' : conflict ? '另一窗口更新了这份工作空间。请重新载入后继续。' : error}</span>{workspace.remoteConflict ? <><div className="sync-conflict-versions"><div><strong>这台设备</strong><p>{state.documents.length} 份简历 · {state.library.length} 个项目</p><small>{state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div><div><strong>云端版本 {workspace.remoteConflict.revision}</strong><p>{workspace.remoteConflict.state.documents.length} 份简历 · {workspace.remoteConflict.state.library.length} 个项目</p><small>{workspace.remoteConflict.state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div></div><Button onClick={()=>workspace.resolveConflict('both')}>两个版本都保留</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('local')}>继续使用本机版本</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('cloud')}>使用云端版本</Button></> : null}<Button variant="secondary" onClick={() => downloadFile('履历恢复备份.json', JSON.stringify(state), 'application/json')}>导出当前内容</Button>{conflict && !workspace.cloud ? <Button onClick={() => window.location.reload()}>重新载入</Button> : null}{workspace.cloud && !conflict ? <Button onClick={()=>saveState==='expired'?open('account'):workspace.retry()}>{saveState==='expired'?'重新登录':'重试同步'}</Button> : null}</div> : null}
@@ -159,11 +167,10 @@ export function App({ workspace, account }) {
       </div>
       <div className="workspace-page-host" hidden={!page} inert={conflict || undefined}>
     {page === 'account' ? <AccountPage account={account} workspace={workspace} onBack={()=>navigate(null)}/> : null}
-    {page === 'projects' ? <ProjectsPage busy={!!busyId} onOpenJob={() => open('job')} onConfigure={() => open('settings')} library={state.library} doc={doc} settings={state.settings} onBack={() => navigate(null)} onSaveProject={p => setState(s => ({ ...s, library: [...s.library.filter(old => old.id !== p.id), p] }))} onApply={applyProjects} onArchive={(id, archived) => setState(s => ({ ...s, library: s.library.map(p => p.id === id ? { ...p, archived } : p) }))} /> : null}
+    {['library', 'profile', 'projects'].includes(page) ? <LibraryPage key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{busy: !!busyId, settings: state.settings, onOpenJob: () => open('job'), onConfigure: () => open('settings'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}
     {page === 'job' ? <JobPage job={doc.job} onBack={() => navigate(null)} onSave={(job, next = null) => { stop(); changeDoc(d => ({ ...d, job, title: d.title === d.job.title + ' · 定向简历' ? job.title + ' · 定向简历' : d.title, resume: { ...d.resume, target: d.resume.target === d.job.title ? job.title : d.resume.target }, updatedAt: Date.now() })); finish(next); notify('目标岗位已更新'); }} /> : null}
-    {page === 'profile' ? <ProfilePage profile={state.profile} onBack={() => navigate(null)} onSave={profile => { setState(s => ({ ...s, profile })); finish(null); notify('个人资料已保存，新建简历时将自动带入'); }} /> : null}
-    {page === 'new' ? <NewDocumentPage library={state.library} onBack={() => navigate(null)} onCreate={(job, projects) => { stop(); const next = makeDocument({ job, projects, profile: state.profile }); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); finish(null); setSelected(null); setFocus(false); setMobileView('chat'); notify('新简历已创建'); }} /> : null}
-    {page === 'settings' ? <SettingsPage modelServiceAvailable={account?.health?.cloudEnabled !== false && (account?.health?.mode !== 'production' || workspace.cloud)} cloudAccount={workspace.cloud ? account.owner.id : null} state={state} onBack={() => navigate(null)} onSave={settings => { stop(); setState(s => ({ ...s, settings })); finish(null); notify('设置已保存'); }} notify={notify} onImport={importBackup} /> : null}
+    {page === 'new' ? <NewDocumentPage profile={state.profile} library={state.library} onBack={() => navigate(null)} onCreate={(job, projects, personalProfile) => { stop(); const next = makeDocument({ job, projects, profile: personalProfile || state.profile }); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); finish(null); setSelected(null); setFocus(false); setMobileView('chat'); notify('新简历已创建'); }} /> : null}
+    {page === 'settings' ? <SettingsPage theme={theme} modelServiceAvailable={account?.health?.cloudEnabled !== false && (account?.health?.mode !== 'production' || workspace.cloud)} cloudAccount={workspace.cloud ? account.owner.id : null} state={state} onBack={() => navigate(null)} onSave={settings => { stop(); setState(s => ({ ...s, settings })); finish(null); notify('设置已保存'); }} notify={notify} onImport={importBackup} /> : null}
     {page === 'versions' ? <VersionsPage doc={doc} onBack={() => navigate(null)} onSave={saveVersion} onRestore={version => { stop(); changeDoc(d => ({ ...mutateResume(d, clone(version.resume), '恢复版本'), job: clone(version.job || d.job), versions: [...d.versions, { id: uid(), name: '恢复前自动保存', time: Date.now(), resume: clone(d.resume), job: clone(d.job) }] })); finish(null); setSelected(null); notify('已恢复版本，原草稿已另存'); }} /> : null}
     {page === 'review' ? <ReviewPage doc={doc} onBack={() => navigate(null)} onApply={apply} onLocate={locate} /> : null}
     {page === 'source' ? <SourcePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}

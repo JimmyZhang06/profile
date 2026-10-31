@@ -1,4 +1,5 @@
-import { fieldValue, fieldLabel, validateSuggestions } from './workspace.js';
+import { assistantFieldIds, fieldValue, fieldLabel, validateSuggestions } from './workspace.js';
+import { visibleRecords } from './profile.js';
 import { getProjectBullets, keywordMatches, projectDetails, projectSearchText } from './projects.js';
 import { restrictMaterialContext, validateMaterialApproval } from './materialScope.js';
 
@@ -17,7 +18,7 @@ export function matchProjects(library, job) {
 }
 export function buildAssistantContext(doc, selected, materialApproval = null, connection = null) {
   const selectedProjects = doc.resume.sources.filter(p => doc.resume.projectIds.includes(p.id));
-  const fields = ['summary', 'experience', 'skills', ...selectedProjects.flatMap(p => getProjectBullets(doc.resume, p.id).map((_, i) => p.id + ':' + i))]
+  const fields = assistantFieldIds(doc.resume)
     .map(id => ({ id, label: fieldLabel(doc.resume, id), text: fieldValue(doc.resume, id) }));
   // Ordinary conversation sends existing resume content, never the newly added
   // detailed archive. Extended material needs a separate, explicit review step.
@@ -44,7 +45,7 @@ export function parseAnswer(raw, doc) {
 async function localResult({ prompt, doc, selected, library }) {
   const r = doc.resume;
   if (/检查|完整|缺少|缺口/.test(prompt)) {
-    const missing = [['姓名', r.name], ['联系方式', r.contact], ['个人简介', r.summary], ['工作经历', r.experience], ['教育背景', r.school]].filter(([, v]) => !v?.trim()).map(([label]) => label);
+    const missing = [['姓名', r.name], ['联系方式', r.contact], ['个人简介', r.summary], ['实习与工作经历', Array.isArray(r.workEntries) ? visibleRecords(r, 'workEntries').map(item => item.description).join('') : r.experience], ['教育背景', Array.isArray(r.educationEntries) ? visibleRecords(r, 'educationEntries').map(item => item.organization).join('') : r.school]].filter(([, v]) => !v?.trim()).map(([label]) => label);
     const quantified = r.projectIds.some(id => getProjectBullets(r, id).some((_, i) => /\d/.test(fieldValue(r, id + ':' + i))));
     return { text: '已经检查当前简历的基础信息。\n\n' + (missing.length ? '待补充：' + missing.join('、') + '。' : '姓名、联系方式、个人简介、工作经历和教育背景均已填写。') + '\n\n' + (!r.projectIds.length ? '还没有选择项目，可以先从素材库添加相关经历。' : '当前选择了 ' + r.projectIds.length + ' 个项目。' + (!quantified ? '项目中尚未填写量化结果；如有真实数据，可以补充统计口径与结果。' : '已有带数字的描述，请确认数据口径和个人贡献。')) + '\n\n这是本地规则检查，岗位语义分析可在连接模型后进行。', proposals: [] };
   }

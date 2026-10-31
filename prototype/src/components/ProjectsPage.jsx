@@ -7,7 +7,7 @@ import { materialFingerprint, prepareProjectSelection, projectDetails, projectSe
 import { ProjectEditor } from './ProjectEditor.jsx';
 import { MaterialReview } from './MaterialReview.jsx';
 
-export function ProjectsPage({ library, doc, settings, onBack, onSaveProject, onApply, onArchive, onConfigure, onOpenJob, busy }) {
+export function ProjectsPage({ library, doc, settings, onBack, onSaveProject, onApply, onArchive, onConfigure, onOpenJob, busy, libraryNavigation }) {
   const [selection, setSelection] = useState(doc.resume.projectIds), [query, setQuery] = useState('');
   const [editing, setEditing] = useState(null), [archived, setArchived] = useState(false), [sort, setSort] = useState(false), [review, setReview] = useState(false), [saved, setSaved] = useState('');
   const [selectionOpen, setSelectionOpen] = useState(() => !window.matchMedia('(max-width: 1000px)').matches);
@@ -27,7 +27,7 @@ export function ProjectsPage({ library, doc, settings, onBack, onSaveProject, on
     navigation?.stay(); onSaveProject(project); setSaved('“' + project.name + '”已保存到素材库'); setEditing(null);
   }} />;
   if (review && connection) return <MaterialReview key={connection.id + connection.baseUrl} projects={selectedProjects} doc={{ ...doc, resume: prepareProjectSelection(doc.resume, selection, combined, settings.capabilities.match ? doc.job : {}) }} job={doc.job} connection={connection} selectionDirty={selectionDirty} busy={busy} onCancel={() => setReview(false)} onConfirm={materialApproval => onApply(selection, combined, { optimize: true, materialApproval })} />;
-  return <Page title="项目素材库" description="完整记录每段经历，再为当前岗位选择适合的项目。" className="page-wide projects-page" dirty={selectionDirty} onBack={onBack}
+  return <Page title={libraryNavigation ? '资料库' : '项目素材库'} description="完整记录项目，再为当前岗位选择适合的内容。" className="page-wide projects-page" dirty={selectionDirty} onBack={onBack} navigation={libraryNavigation}
     actions={<Button variant="secondary" onClick={() => setEditing({})}><IconPlus size={16} />新增项目</Button>}
     footer={<><span className="footer-note">{selectionDirty ? '选材有变更 · ' : ''}已选 {selection.length} 个项目{!doc.job.text.trim() ? ' · 补充 JD 后可生成草稿' : ''}</span><div className="project-footer-actions"><Button variant="secondary" onClick={() => onApply(selection, combined)}>应用并返回</Button><Button disabled={!ready || busy} onClick={() => connection ? setReview(true) : onApply(selection, combined, { regenerate: true })}>{connection ? <IconSparkles size={16} /> : <IconFileText size={16} />}{connection ? '按 JD 优化' : '生成岗位草稿'}<IconArrowRight size={15} /></Button></div></>}>
     {saved ? <div className="material-saved" role="status"><IconCheck size={16} />{saved}<IconButton label="关闭保存提示" onClick={() => setSaved('')}><IconX size={14} /></IconButton></div> : null}

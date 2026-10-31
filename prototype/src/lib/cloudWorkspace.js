@@ -6,6 +6,7 @@ import {
   DEFAULT_CHAT_RATIO,
 } from "./workspace.js";
 import { templateDesign } from "./resumeDesign.js";
+import { mergeProfiles, profileHasContent } from './profile.js';
 
 export const canonicalJSON = (value) =>
   JSON.stringify(value, (_, item) =>
@@ -20,6 +21,7 @@ export function isPlaceholderDocument(d) {
   return (
     d.title === "我的简历" &&
     !Object.keys(fieldLabels).some((key) => d.resume[key]) &&
+    !profileHasContent(d.resume) &&
     !Object.values(d.job).some(Boolean) &&
     !d.resume.sources.length &&
     !Object.keys(d.resume.overrides).length &&
@@ -81,6 +83,7 @@ export function mergeImportedWorkspace(
   }
   collect(incoming.library);
   collect(incoming.documents);
+  collect(incoming.profile);
   function mapped(value) {
     if (mappings.has(value)) return mappings.get(value);
     if (typeof value === "string" && value.includes(":")) {
@@ -109,12 +112,7 @@ export function mergeImportedWorkspace(
   if (!documents.length) documents.push(...current.documents);
   return {
     ...current,
-    profile: Object.fromEntries(
-      Object.entries(current.profile).map(([key, value]) => [
-        key,
-        value || imported.profile[key] || "",
-      ]),
-    ),
+    profile: mergeProfiles(current.profile, imported.profile, makeId),
     library: [...current.library, ...imported.library],
     documents,
     activeId: imported.documents[0]?.id || documents[0].id,

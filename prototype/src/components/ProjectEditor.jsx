@@ -20,7 +20,7 @@ function fitMaterialTextArea(element) {
   element.style.height = Math.min(element.scrollHeight + 2, 480) + 'px';
 }
 
-function MaterialTextArea({ value, ...props }) {
+export function MaterialTextArea({ value, ...props }) {
   const ref = useRef(null);
   useLayoutEffect(() => { fitMaterialTextArea(ref.current); }, [value]);
   useLayoutEffect(() => {

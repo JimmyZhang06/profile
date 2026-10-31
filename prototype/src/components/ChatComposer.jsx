@@ -53,7 +53,7 @@ export function ChatComposer({ doc, settings, selected, busy, focusKey, active, 
         <Menu label="添加资料" className="attach-menu opens-up" icon={<IconPlus size={20} />} value="" items={[
           { label: '项目素材', description: '当前简历已关联 ' + doc.resume.projectIds.length + ' 个项目', icon: <IconBooks size={18} />, onClick: () => onOpen('projects') },
           { label: '岗位 JD', description: doc.job.title || '添加目标岗位', icon: <IconBriefcase2 size={18} />, onClick: () => onOpen('job') },
-          { label: '个人资料', icon: <IconFileText size={18} />, onClick: () => onOpen('profile') },
+          { label: '基础资料与经历', icon: <IconFileText size={18} />, onClick: () => onOpen('library') },
         ]} />
         <Menu label="快捷调整" className="quick-actions-menu opens-up" icon={<IconSparkles size={18} />} value="" items={
           [selected ? '精简这段文字' : '精简个人简介', '推荐相关项目', '检查完整度'].map(text => ({ label: text, disabled: !enabled || busy, onClick: () => send(text) }))

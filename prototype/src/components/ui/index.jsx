@@ -8,7 +8,7 @@ export function IconButton({ label, children, className = '', ...props }) {
 export function Button({ children, variant = 'primary', className = '', busy, ...props }) {
   return <button type="button" className={'button button-' + variant + ' ' + className} {...props}>{busy ? <IconLoader2 size={16} className="spin" /> : null}{children}</button>;
 }
-export function Page({ title, description, children, onBack, backLabel = '返回简历', className = '', footer, actions, dirty = false }) {
+export function Page({ title, description, children, onBack, backLabel = '返回简历', className = '', footer, actions, navigation: pageNavigation, dirty = false }) {
   const id = useId(), heading = useRef(null);
   const navigation = useContext(PageNavigationContext);
   const registerDirty = navigation?.registerDirty;
@@ -27,6 +27,7 @@ export function Page({ title, description, children, onBack, backLabel = '返回
     </header>
     <div className="page-scroll"><div className="page-content">
       <header className="page-heading"><div><h1 ref={heading} id={id} tabIndex={-1}>{title}</h1>{description ? <p>{description}</p> : null}</div>{actions ? <div className="page-heading-actions">{actions}</div> : null}</header>
+      {pageNavigation}
       {children}
     </div></div>
     {footer ? <footer className="page-footer"><div className="page-footer-content">{footer}</div></footer> : null}
