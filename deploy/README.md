@@ -129,3 +129,5 @@ Do not delete old releases, database volumes or other services during deployment
 Check the HTTPS page, hashed assets, `/api/cloud/health`, the administrator setup
 status, unavailable email login before SMTP, unauthorized admin API rejection,
 no private-file access, theme switching and browser-local saving.
+
+Cloud activation and verification are recorded in [CLOUD-2026-10-31.md](CLOUD-2026-10-31.md).
