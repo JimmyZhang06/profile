@@ -4,6 +4,10 @@ The deployment uses the server's existing Apache reverse proxy, a separate
 unprivileged `luli` systemd service and release directories under `/opt/luli`.
 Only Apache listens publicly. Node binds to `127.0.0.1:4180`.
 
+The latest product release is recorded in
+[PROFILE-2026-10-31.md](PROFILE-2026-10-31.md), including structured-profile
+compatibility and rollback requirements.
+
 ## Release preparation
 
 Build and test in `prototype/`. A release contains the repository source plus
