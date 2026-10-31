@@ -3,7 +3,15 @@ import { readFile, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { createDatabase, one, query } from "./database.mjs";
-import { createAuthentication, identity, verifyAdmin } from "./auth.mjs";
+import {
+  createAuthentication,
+  identity,
+  verifyAdmin,
+  grantAdminResponse,
+} from "./auth.mjs";
+import { createMailService } from "./mail.mjs";
+import { bootstrapStatus, completeBootstrap } from "./bootstrap.mjs";
+import { isIP } from "node:net";
 import { assert, HttpError, limit, audit } from "./security.mjs";
 import {
   ensureWorkspace,
@@ -39,7 +47,8 @@ async function readBody(req) {
 export async function createCloudApp(config) {
   const database = await createDatabase(config),
     db = database.db;
-  const authentication = createAuthentication(db, config);
+  const mail = createMailService(db, config);
+  const authentication = createAuthentication(db, config, mail);
   await authentication.migrate();
   await database.migrate();
   await seedTemplates(db);
@@ -48,13 +57,21 @@ export async function createCloudApp(config) {
   const publicAuthPaths = new Set([
     "/get-session",
     "/sign-in/email-otp",
+    "/sign-in/email",
     "/email-otp/send-verification-otp",
     "/sign-out",
   ]);
   async function handler(req, res) {
-    // Never trust a client-supplied IP header. Proxy-aware deployment can set a
-    // vetted address here later; local development uses the actual socket peer.
-    req.headers["x-luli-peer-ip"] = req.socket.remoteAddress;
+    // Apache overwrites X-Forwarded-For. Only an explicitly trusted loopback
+    // proxy may supply it; clients cannot supply our private identity header.
+    const peer = req.socket.remoteAddress;
+    const forwarded = String(req.headers["x-forwarded-for"] || "").trim();
+    req.headers["x-luli-peer-ip"] =
+      config.trustProxy &&
+      ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer) &&
+      isIP(forwarded)
+        ? forwarded
+        : peer;
     const url = new URL(req.url, config.origin),
       path = url.pathname;
     try {
@@ -66,7 +83,7 @@ export async function createCloudApp(config) {
           ok: true,
           cloudEnabled: true,
           mode: config.production ? "production" : "development",
-          mailMode: config.smtp ? "smtp" : "local-mailbox",
+          ...(await mail.status()),
         });
       if (path.startsWith("/api/")) {
         const origin = req.headers.origin;
@@ -82,9 +99,58 @@ export async function createCloudApp(config) {
             "请求缺少客户端标识",
           );
       }
+      if (path === "/api/setup/status" && req.method === "GET")
+        return json(res, 200, await bootstrapStatus(db));
+      if (path === "/api/setup/complete" && req.method === "POST") {
+        await limit(db, "setup:" + req.headers["x-luli-peer-ip"], 6, 300);
+        const response = await completeBootstrap(
+          db,
+          authentication,
+          config,
+          await readBody(req),
+        );
+        const cookies = response.headers.getSetCookie();
+        if (cookies.length) res.setHeader("Set-Cookie", cookies);
+        return json(res, 200, { initialized: true });
+      }
+      if (
+        [
+          "/api/auth/two-factor/verify-totp",
+          "/api/auth/two-factor/verify-backup-code",
+        ].includes(path) &&
+        req.method === "POST"
+      ) {
+        await limit(db, "login-totp:" + req.headers["x-luli-peer-ip"], 8, 300);
+        const body = await readBody(req);
+        const response = await auth.api[
+          path.endsWith("verify-totp") ? "verifyTOTP" : "verifyBackupCode"
+        ]({
+          headers: fromNodeHeaders(req.headers),
+          body: { code: String(body.code || ""), trustDevice: false },
+          asResponse: true,
+        });
+        assert(response.ok, 400, "验证器代码不正确或已失效。");
+        return json(
+          res,
+          200,
+          await grantAdminResponse(req, res, response, auth, db),
+        );
+      }
       if (path.startsWith("/api/auth/")) {
         assert(publicAuthPaths.has(path.slice(9)), 404, "认证接口未开放");
-        await limit(db, "auth-ip:" + req.socket.remoteAddress, 60, 60);
+        await limit(db, "auth-ip:" + req.headers["x-luli-peer-ip"], 60, 60);
+        if (
+          [
+            "/api/auth/email-otp/send-verification-otp",
+            "/api/auth/sign-in/email-otp",
+          ].includes(path)
+        )
+          assert(
+            (await mail.status()).mailReady,
+            503,
+            "邮箱登录暂未开放，请稍后再试。",
+            "MAIL_NOT_CONFIGURED",
+          );
         return await authHandler(req, res);
       }
       if (!path.startsWith("/api/")) {
@@ -265,6 +331,11 @@ export async function createCloudApp(config) {
       } else if (path === "/api/admin/gate" && req.method === "GET")
         result = {
           enabled: !!actor.user.twoFactorEnabled,
+          passwordRequired: !!(await one(
+            db,
+            'SELECT id FROM account WHERE "userId"=$1 AND "providerId"=\'credential\' AND password IS NOT NULL',
+            [actor.user.id],
+          )),
           verified: !!(await one(
             db,
             "SELECT session_id FROM admin_grants WHERE session_id=$1 AND expires_at>NOW()",
@@ -284,7 +355,10 @@ export async function createCloudApp(config) {
         );
         result = await auth.api.enableTwoFactor({
           headers: fromNodeHeaders(req.headers),
-          body: { method: "totp" },
+          body: {
+            method: "totp",
+            ...(body.password ? { password: String(body.password) } : {}),
+          },
         });
       } else if (path === "/api/admin/verify" && req.method === "POST")
         result = await verifyAdmin(req, res, body, auth, db);
@@ -292,6 +366,7 @@ export async function createCloudApp(config) {
         result = await adminRoute({
           db,
           config,
+          mail,
           actor,
           path: path.slice(10),
           method: req.method,

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { one, query } from "./database.mjs";
-import { assert, audit } from "./security.mjs";
+import { assert, audit, limit } from "./security.mjs";
 import { safeConnection, saveConnection } from "./models.mjs";
 import {
   resumeTemplates,
@@ -37,6 +37,7 @@ export function publicTemplates(db) {
 export async function adminRoute({
   db,
   config,
+  mail,
   actor,
   path,
   method,
@@ -48,6 +49,14 @@ export async function adminRoute({
       0,
       Math.min(100000, Number(url.searchParams.get("offset")) || 0),
     );
+  if (path === "/mail" && method === "GET") return mail.get();
+  if (path === "/mail" && method === "PUT") return mail.save(body, actor.user);
+  if (["/mail/verify", "/mail/test"].includes(path) && method === "POST") {
+    await limit(db, "smtp-test:" + actor.user.id, 4, 60);
+    return path.endsWith("/verify")
+      ? mail.verify(actor.user)
+      : mail.test(actor.user);
+  }
   if (path === "/overview" && method === "GET")
     return {
       counts: await one(
@@ -58,7 +67,8 @@ export async function adminRoute({
         db,
         "SELECT id,model_name,error_type,started_at FROM model_usage WHERE status='failed' ORDER BY started_at DESC LIMIT 8",
       ),
-      mailConfigured: !!config.smtp,
+      mailConfigured: (await mail.status()).mailMode === "smtp",
+      mailMode: (await mail.status()).mailMode,
       database: config.databaseUrl ? "PostgreSQL" : "本机开发数据库",
       allowedModelHosts: config.allowedModelHosts,
     };

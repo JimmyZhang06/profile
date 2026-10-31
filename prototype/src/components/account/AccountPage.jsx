@@ -39,21 +39,28 @@ export function EmailLogin({
     const timer = setTimeout(() => setSeconds((value) => value - 1), 1000);
     return () => clearTimeout(timer);
   }, [seconds]);
-  if (health?.cloudEnabled === false)
+  if (health?.cloudEnabled === false || (!admin && health?.mailReady === false))
     return (
       <div className="email-login">
         <div className="account-brand" aria-label="履历">
           <BrandLogo expanded />
         </div>
         <div className="account-kicker">YOUR PERSONAL WORKSPACE</div>
-        <h1>{admin ? "管理后台暂未开放" : "先把经历，写得更好。"}</h1>
+        <h1>
+          {admin
+            ? "管理后台暂未开放"
+            : health?.cloudEnabled
+              ? "邮箱登录准备中"
+              : "先把经历，写得更好。"}
+        </h1>
         <p>
-          云端账号服务准备中。目前可使用完整的简历编辑、项目素材、排版模板和内置整理，资料保存在当前浏览器中。
+          邮箱登录尚未开放。目前可使用完整的简历编辑、项目素材、排版模板和内置整理，资料保存在当前浏览器中。
         </p>
         <p className="account-footnote">
           <IconDeviceDesktop size={16} />
           在「AI 与设置 → 本机数据」中可导出完整备份，换设备后再导入。
         </p>
+        {health?.cloudEnabled ? <a href="/admin">管理员登录</a> : null}
       </div>
     );
   async function send() {

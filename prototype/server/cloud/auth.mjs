@@ -4,12 +4,12 @@ import { emailOTP, twoFactor } from "better-auth/plugins";
 import { getMigrations } from "better-auth/db/migration";
 import { fromNodeHeaders } from "better-auth/node";
 import { appendFile } from "node:fs/promises";
-import nodemailer from "nodemailer";
+import { randomBytes } from "node:crypto";
 import { one, query } from "./database.mjs";
 import { assert, limit } from "./security.mjs";
 
-export function createAuthentication(db, config) {
-  const mailer = config.smtp ? nodemailer.createTransport(config.smtp) : null;
+export function createAuthentication(db, config, mail) {
+  const bootstrapProof = randomBytes(32).toString("base64url");
   async function allowed(email) {
     const access = await one(
       db,
@@ -31,7 +31,12 @@ export function createAuthentication(db, config) {
     secret: config.authSecret,
     database: { db, type: "postgres" },
     trustedOrigins: config.origins || [config.origin],
-    emailAndPassword: { enabled: false },
+    emailAndPassword: {
+      enabled: true,
+      autoSignIn: false,
+      minPasswordLength: 12,
+      maxPasswordLength: 128,
+    },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 12,
@@ -60,14 +65,9 @@ export function createAuthentication(db, config) {
               message: "此邮箱尚未获邀，或账号已停用。",
             });
           if (config.deliverOTP) await config.deliverOTP({ email, otp, type });
-          else if (mailer)
-            await mailer.sendMail({
-              from: config.mailFrom,
-              to: email,
-              subject: "履历 · 邮箱验证码",
-              text: `你的验证码是 ${otp}，5 分钟内有效。若非本人操作，请忽略。`,
-            });
-          else {
+          else if (await mail?.sendOTP({ email, otp, type })) {
+            /* Delivered by the configured transport. */
+          } else {
             assert(!config.production, 503, "邮件服务未配置");
             await appendFile(
               config.dataDir + "/development-mailbox.jsonl",
@@ -86,6 +86,33 @@ export function createAuthentication(db, config) {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (
+          ctx.path === "/sign-up/email" &&
+          ctx.headers?.get("x-luli-bootstrap-proof") !== bootstrapProof
+        )
+          throw new APIError("FORBIDDEN", { message: "公开密码注册未开放。" });
+        if (ctx.path === "/sign-in/email") {
+          const email = String(ctx.body?.email || "")
+            .trim()
+            .toLowerCase();
+          try {
+            await limit(db, "admin-password:" + email, 6, 60);
+          } catch {
+            throw new APIError("TOO_MANY_REQUESTS", {
+              message: "登录尝试过于频繁，请稍后再试。",
+            });
+          }
+          const administrator = await one(
+            db,
+            "SELECT a.user_id FROM \"user\" u JOIN account_access a ON a.user_id=u.id WHERE LOWER(u.email)=$1 AND a.role='admin' AND a.status='active'",
+            [email],
+          );
+          if (!administrator)
+            throw new APIError("UNAUTHORIZED", {
+              message: "邮箱或密码不正确。",
+            });
+          ctx.body.email = email;
+        }
         if (
           ["/email-otp/send-verification-otp", "/sign-in/email-otp"].includes(
             ctx.path,
@@ -163,6 +190,19 @@ export function createAuthentication(db, config) {
       return (auth ||= betterAuth(options));
     },
     options,
+    async bootstrapSignup(body) {
+      const created = await this.auth.api.signUpEmail({
+        body,
+        headers: new Headers({ "x-luli-bootstrap-proof": bootstrapProof }),
+        asResponse: true,
+      });
+      if (!created.ok) return created;
+      // User hooks commit account_access before a session is created.
+      return this.auth.api.signInEmail({
+        body: { email: body.email, password: body.password },
+        asResponse: true,
+      });
+    },
     async migrate() {
       const migration = await getMigrations(options);
       await migration.runMigrations();
@@ -218,6 +258,56 @@ export async function identity(
   }
   return { ...session, access };
 }
+export async function grantAdminResponse(
+  req,
+  res,
+  result,
+  auth,
+  db,
+  expectedUserId,
+) {
+  const headers = fromNodeHeaders(req.headers),
+    cookies = result.headers.getSetCookie();
+  const cookieMap = new Map(
+    (headers.get("cookie") || "")
+      .split(";")
+      .filter(Boolean)
+      .map((part) => {
+        const at = part.indexOf("=");
+        return [part.slice(0, at).trim(), part.slice(at + 1)];
+      }),
+  );
+  for (const value of cookies) {
+    const part = value.split(";")[0],
+      at = part.indexOf("=");
+    cookieMap.set(part.slice(0, at), part.slice(at + 1));
+  }
+  headers.set("cookie", [...cookieMap].map(([k, v]) => k + "=" + v).join("; "));
+  const verified = await auth.api.getSession({ headers });
+  assert(
+    verified?.user.twoFactorEnabled &&
+      (!expectedUserId || verified.user.id === expectedUserId),
+    403,
+    "二次验证未完成",
+  );
+  const access = await one(
+    db,
+    "SELECT role,status FROM account_access WHERE user_id=$1",
+    [verified.user.id],
+  );
+  assert(
+    access?.role === "admin" && access.status === "active",
+    403,
+    "没有管理权限",
+  );
+  await query(
+    db,
+    "INSERT INTO admin_grants(session_id,expires_at) VALUES($1,NOW()+INTERVAL '30 minutes') ON CONFLICT(session_id) DO UPDATE SET expires_at=EXCLUDED.expires_at",
+    [verified.session.id],
+  );
+  if (cookies.length) res.setHeader("Set-Cookie", cookies);
+  return { verified: true, expiresIn: 1800 };
+}
 export async function verifyAdmin(req, res, body, auth, db) {
   const current = await identity(req, auth, db, { admin: true, stepUp: false });
   await limit(db, "totp:" + current.user.id, 8, 300);
@@ -238,34 +328,5 @@ export async function verifyAdmin(req, res, body, auth, db) {
     "验证器代码不正确或已失效，请重新输入。",
     "INVALID_TOTP",
   );
-  const headers = fromNodeHeaders(req.headers),
-    cookies = result.headers.getSetCookie();
-  const cookieMap = new Map(
-    (headers.get("cookie") || "")
-      .split(";")
-      .filter(Boolean)
-      .map((part) => {
-        const at = part.indexOf("=");
-        return [part.slice(0, at).trim(), part.slice(at + 1)];
-      }),
-  );
-  for (const value of cookies) {
-    const part = value.split(";")[0],
-      at = part.indexOf("=");
-    cookieMap.set(part.slice(0, at), part.slice(at + 1));
-  }
-  headers.set("cookie", [...cookieMap].map(([k, v]) => k + "=" + v).join("; "));
-  const verified = await auth.api.getSession({ headers });
-  assert(
-    verified?.user.id === current.user.id && verified.user.twoFactorEnabled,
-    403,
-    "二次验证未完成",
-  );
-  await query(
-    db,
-    "INSERT INTO admin_grants(session_id,expires_at) VALUES($1,NOW()+INTERVAL '30 minutes') ON CONFLICT(session_id) DO UPDATE SET expires_at=EXCLUDED.expires_at",
-    [verified.session.id],
-  );
-  if (cookies.length) res.setHeader("Set-Cookie", cookies);
-  return { verified: true, expiresIn: 1800 };
+  return grantAdminResponse(req, res, result, auth, db, current.user.id);
 }

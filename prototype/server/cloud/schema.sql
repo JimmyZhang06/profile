@@ -16,3 +16,5 @@ CREATE INDEX IF NOT EXISTS model_usage_period ON model_usage(user_id, started_at
 CREATE TABLE IF NOT EXISTS template_releases (id TEXT NOT NULL, version INTEGER NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL, design JSONB NOT NULL, state TEXT NOT NULL CHECK(state IN ('draft','published','retired')), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), published_at TIMESTAMPTZ, PRIMARY KEY(id,version));
 CREATE TABLE IF NOT EXISTS template_catalog (id TEXT PRIMARY KEY, published_version INTEGER, enabled BOOLEAN NOT NULL DEFAULT TRUE);
 CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, actor_id TEXT, actor_email TEXT NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL, before_value JSONB, after_value JSONB, reason TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS admin_bootstrap (id INTEGER PRIMARY KEY CHECK(id=1), token_hash TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, consumed_at TIMESTAMPTZ);
+CREATE TABLE IF NOT EXISTS platform_settings (key TEXT PRIMARY KEY, data JSONB NOT NULL, secret TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());

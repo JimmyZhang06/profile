@@ -102,6 +102,15 @@ test('local proxy forwards streaming responses and protects connection credentia
 });
 
 // Transport boundary checks use a mock Fetch response, never an external model.
+test('local model middleware leaves account and administrator setup requests to the cloud API', async () => {
+  const middleware = aiMiddleware();
+  for (const url of ['/api/setup/status', '/api/setup/complete', '/api/auth/sign-in/email', '/api/admin/mail', '/api/cloud/health']) {
+    let forwarded = false;
+    await middleware({ url, headers: {} }, {}, () => { forwarded = true; });
+    assert.equal(forwarded, true, url);
+  }
+});
+
 test('stream parser handles split UTF-8 and CRLF event boundaries', async t => {
   const originalFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = originalFetch; });

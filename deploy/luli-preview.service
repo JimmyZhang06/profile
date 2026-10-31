@@ -1,0 +1,27 @@
+[Unit]
+Description=Luli legacy browser-local preview
+After=network.target
+
+[Service]
+Type=simple
+User=luli
+Group=luli
+WorkingDirectory=/opt/luli/preview/prototype
+Environment=NODE_ENV=production
+Environment=CLOUD_ENABLED=false
+Environment=API_HOST=127.0.0.1
+Environment=API_PORT=4181
+Environment=APP_ORIGIN=https://resume-47-93-237-199.sslip.io
+ExecStart=/usr/local/bin/node server/api.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/luli
+
+[Install]
+WantedBy=multi-user.target

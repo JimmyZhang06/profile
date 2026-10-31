@@ -6,6 +6,64 @@
   background: var(--bg);
   font-size: 15px;
 }
+.admin-mail-form {
+  max-width: 850px;
+}
+.admin-mail-form .admin-section {
+  margin-bottom: 0;
+}
+.admin-mail-form .admin-section > h2 {
+  margin-bottom: 20px;
+}
+.admin-mail-form .field-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px 16px;
+}
+.admin-mail-form .field-grid > .field,
+.admin-mail-form .field-grid > .select-field {
+  margin: 0;
+}
+.admin-mail-form input:not([type="checkbox"]),
+.admin-mail-form .select-field-trigger {
+  min-height: 44px;
+  padding: 10px 12px;
+}
+.admin-mail-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 0 24px;
+}
+.mail-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.mail-toggle input {
+  accent-color: var(--text-strong);
+  width: 16px;
+  height: 16px;
+}
+.admin-login-switch {
+  display: block;
+  margin: 0 auto 28px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 0;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .admin-mail-form .field-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-mail-actions > .button {
+    flex: 1 1 100%;
+  }
+}
 .account-page .page-content {
   max-width: 880px;
 }

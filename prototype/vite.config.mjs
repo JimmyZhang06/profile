@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => {
         "/api/cloud": apiOrigin,
         "/api/auth": apiOrigin,
         "/api/admin": apiOrigin,
+        "/api/setup": apiOrigin,
       },
       host: "127.0.0.1",
       allowedHosts: ["terminal.local"],

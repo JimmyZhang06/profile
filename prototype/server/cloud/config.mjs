@@ -31,13 +31,11 @@ export async function loadConfig(env = process.env) {
     (!env.DATABASE_URL ||
       !env.BETTER_AUTH_SECRET ||
       !env.CREDENTIAL_KEY ||
-      !env.SMTP_HOST ||
       !env.BOOTSTRAP_ADMIN_EMAIL ||
-      !env.MAIL_FROM ||
       !origin.startsWith("https://"))
   )
     throw new Error(
-      "正式环境必须配置 PostgreSQL、HTTPS、认证密钥、凭据加密密钥、管理员邮箱、发件人和 SMTP。",
+      "正式环境必须配置 PostgreSQL、HTTPS、认证密钥、凭据加密密钥和管理员邮箱。",
     );
   if (env.BETTER_AUTH_SECRET && env.BETTER_AUTH_SECRET.length < 32)
     throw new Error("BETTER_AUTH_SECRET 至少需要 32 个字符。");
@@ -70,6 +68,7 @@ export async function loadConfig(env = process.env) {
     port: Number(env.API_PORT || 4175),
     host: production ? env.API_HOST || "127.0.0.1" : "127.0.0.1",
     databaseUrl: env.DATABASE_URL,
+    trustProxy: env.TRUST_PROXY_LOOPBACK === "true",
     authSecret: env.BETTER_AUTH_SECRET || secrets.auth,
     credentialKey,
     adminEmail: String(

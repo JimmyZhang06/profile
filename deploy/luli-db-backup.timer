@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Luli PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 03:35:00
+RandomizedDelaySec=10m
+Persistent=true
+Unit=luli-db-backup.service
+
+[Install]
+WantedBy=timers.target

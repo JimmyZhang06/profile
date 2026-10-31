@@ -17,7 +17,7 @@ export const systemPrompt = `你是简历编辑助手。sources 中的 details �
 export function aiMiddleware() {
   return async (req, res, next) => {
     if (!req.url?.startsWith('/api/')) return next();
-    if (/^\/api\/(cloud|auth|admin)(\/|$)/.test(req.url)) return next();
+    if (/^\/api\/(cloud|auth|admin|setup)(\/|$)/.test(req.url)) return next();
     let foreignOrigin = false;
     try { foreignOrigin = !!req.headers.origin && new URL(req.headers.origin).host !== req.headers.host; } catch { foreignOrigin = true; }
     if (req.headers['x-luli-client'] !== 'workspace' || foreignOrigin || !/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) return json(res, 403, { error: '仅允许当前本机工作区访问。' });

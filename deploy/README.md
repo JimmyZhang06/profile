@@ -63,13 +63,60 @@ arguments. Otherwise Certbot's non-interactive random delay may exceed a short
 manual validation timeout. The custom hostname passed this complete rehearsal
 on 2026-10-31; ordinary scheduled renewal retains its normal jitter.
 
-## Cloud activation later
+## Cloud service and first administrator
 
-Configure a dedicated PostgreSQL database, real SMTP delivery, the administrator
-email, authentication secret and 32-byte encryption key. Set `CLOUD_ENABLED=true`
-and restart. Missing production settings fail startup; there is no automatic
-fallback to development authentication or a public OTP mailbox. Do not import
-development databases. Empty model host allowlists reject all external calls.
+The custom domain runs cloud mode with a dedicated PostgreSQL database,
+deployment administrator email, authentication secret and 32-byte credential
+encryption key in `/etc/luli/luli.env` (root, mode 0600). SMTP is optional at
+startup and can be managed under **管理后台 → 邮件服务**. Until SMTP is enabled,
+public email login returns `MAIL_NOT_CONFIGURED`; there is no public development
+mailbox. Empty model host allowlists reject all external calls.
+
+From the active release's `prototype/` directory, issue a one-time setup file:
+
+```sh
+node --env-file=/etc/luli/luli.env scripts/create-admin-setup.mjs /etc/luli/admin-setup.txt
+```
+
+Deliver this file privately. The owner enters their own password at `/admin`,
+then binds an authenticator and stores recovery codes. No real administrator
+credentials are created during automated verification. Setup expires after
+24 hours and is single-use; rerunning issuance before initialization invalidates
+the preceding code. Once an administrator exists, issuance is blocked.
+
+The old preview runs `luli-preview.service` on `127.0.0.1:4181`, with
+`/opt/luli/preview` pinned to the previous browser-only release. Its Apache vhost
+proxies to 4181; only the custom hostname reaches the cloud process on 4180.
+
+## PostgreSQL and backup
+
+PostgreSQL 17.11 runs in the dedicated `luli-postgres` container, with 384 MiB
+memory, 64 MiB shared buffers, 40 connections and a private Docker network.
+The official Docker image is mirrored by its publisher on ECR:
+`public.ecr.aws/docker/library/postgres:17.11-bookworm`, pinned to manifest digest
+`sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5`.
+
+Bind `/var/lib/luli-postgres/data` directly to `/var/lib/postgresql/data`;
+PostgreSQL 17 declares that exact volume, so mounting only its parent would
+create an unintended anonymous data volume. The data directory is owned by UID
+999 and mode 0700. Publish port 5432 on **127.0.0.1 only**, use SCRAM credentials,
+and mount `/etc/luli/postgres-password` read-only at
+`/run/secrets/postgres-password` through `POSTGRES_PASSWORD_FILE`.
+
+The application role `luli` owns only database `luli` and has no superuser,
+role-creation or database-creation privileges. Isolated QA uses `luli_qa` and a
+separate `luli_test_admin` database. Never run destructive tests against `luli`.
+
+Install `backup-database.sh` at `/etc/luli/backup-database.sh` (0755), create
+`/var/backups/luli` (root, 0700), and enable `luli-db-backup.timer`. It creates
+daily custom-format dumps and validates their archive lists. Files are retained
+in that dedicated private directory; copy them to independent storage according
+to the owner's backup policy. Back up `/etc/luli` separately with equal access
+controls: the database dump alone does not include credential-encryption keys.
+
+For a manual backup, run `systemctl start luli-db-backup.service`. Validate
+restoration in a new `luli_test_...` database with `pg_restore --no-owner
+--no-privileges`; never restore over the live database as a verification step.
 
 Back up the database before upgrades. Reverting a code symlink does not undo a
 database migration. Validate login, account isolation, sync and recovery before
@@ -79,5 +126,6 @@ inviting users. See `prototype/CLOUD.md` for proxy/rate-limit considerations.
 
 Relink `/opt/luli/current` to the prior validated release and restart only `luli`.
 Do not delete old releases, database volumes or other services during deployment.
-Check the HTTPS page, hashed assets, `/api/cloud/health`, the account unavailable
-message, no private-file access, theme switching and browser-local saving.
+Check the HTTPS page, hashed assets, `/api/cloud/health`, the administrator setup
+status, unavailable email login before SMTP, unauthorized admin API rejection,
+no private-file access, theme switching and browser-local saving.

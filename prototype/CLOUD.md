@@ -15,7 +15,13 @@ npm run dev
 
 已有前端进程时可以单独运行 `npm run dev:api`；已有 API 时可以运行 `npm run dev:client -- --port 4174 --strictPort`。不要让两个 API 同时打开同一个 PGlite 目录。
 
-默认开发管理员邮箱是 `owner@luli.local`，可在 `.env` 中设置 `BOOTSTRAP_ADMIN_EMAIL`。该邮箱首次注册不需要邀请，并由服务端赋予管理员角色；已存在的普通账号不会因为改环境变量自动升级。
+默认开发管理员邮箱是 `owner@luli.local`，可在 `.env` 中设置 `BOOTSTRAP_ADMIN_EMAIL`。角色仅由服务端初始化；已存在的普通账号不会因为改环境变量自动升级。管理员可先签发一次性初始化码，再在 `/admin` 设置密码并绑定验证器：
+
+```powershell
+node --env-file-if-exists=.env scripts/create-admin-setup.mjs .data/admin-setup.txt
+```
+
+初始化说明仅写入指定私有文件，数据库只存码的哈希。码有效期 24 小时、只能消费一次；管理员存在后不能再次签发。不要把说明文件上传到仓库或静态站点。普通用户不能用密码注册或登录。
 
 在页面申请验证码后，读取本机开发邮箱：
 
@@ -25,7 +31,7 @@ Get-Content .data/cloud/development-mailbox.jsonl -Tail 1
 
 未配置 SMTP 时不会发送真实邮件。验证码 5 分钟有效。开发邮箱、开发密钥和测试验证器仅存于 `.data/`，已从版本控制和 Vite 文件服务中排除，不要上传到静态发布包。
 
-首次进入后台需绑定自己的验证器，并保存一次性恢复代码。以后用验证器或恢复代码取得 30 分钟后台授权；邮箱验证码登录本身没有后台操作权限。已绑定的验证器不能通过首次设置接口重置。
+首次进入后台需绑定自己的验证器，并保存一次性恢复代码。管理员密码登录不依赖邮件，绑定后登录还须通过验证器或恢复代码。每次取得 30 分钟后台授权；仅登录账号没有后台操作权限。已绑定的验证器不能通过首次设置接口重置。
 
 ## 个人资料的保存与恢复
 
@@ -46,11 +52,16 @@ Get-Content .data/cloud/development-mailbox.jsonl -Tail 1
 | 运行概览 | 活跃用户、月调用量与成功率、有效邀请、最近失败及配置提醒 |
 | 用户与邀请 | 搜索、筛选、独立详情、启停、额度、撤销会话；登记和撤销 7 天邀请 |
 | AI 服务 | 平台连接、启停、输出上限、总额度、凭据掩码、允许的域名 |
+| 邮件服务 | 启停、SMTP 465/587、发件身份、加密凭据、验证连接、向当前管理员发送测试邮件 |
 | 简历模板 | 实际预览、排版参数、草稿版本、发布、下架、回滚 |
 | 使用记录 | 时间、邮箱、模型、来源、状态、耗时和供应商返回的 token 用量 |
 | 操作记录 | 操作人、目标、原因及前后值，隐藏密钥 |
 
 邀请登记建立准入名单，由管理员分享登录链接；本版不自动发送独立邀请邮件。受邀者在登录页申请验证码。
+
+邮件服务未配置时，正式环境不产生开发验证码，也不开放邮箱验证码登录。邮件设置支持 SMTP 密码或授权码认证；若服务商只允许 OAuth，需要选择兼容发送通道。管理员邮箱与发件邮箱可以不同。保存后立即生效，留空密码保留原凭据，更换服务器、端口或登录账号须重新提供凭据。测试邮件只发给已验证的当前管理员，实际收件仍需管理员确认。
+
+SMTP 凭据通过 AES-256-GCM 加密，绑定服务器、端口和账号；读取接口及审计均不返回原值。连接仅允许公开域名的 465/TLS 或 587/STARTTLS，检查并固定 DNS，验证服务器证书。后台设置优先于环境中的 SMTP 配置。
 
 模板的 `catalogId / catalogVersion / catalogDefaults` 固定在每份简历中。后台发布和下架不会改写旧简历；用户主动更新后才改变排版。五种布局共享同一简历渲染组件。
 
@@ -73,17 +84,17 @@ Get-Content .data/cloud/development-mailbox.jsonl -Tail 1
 已有静态发布配置保持不变，但账号能力需要常驻 Node.js API 和 PostgreSQL。只发布 `dist/` 或现有 Sites Worker 不会启用此后端。
 
 1. 创建独立 PostgreSQL 数据库及备份/恢复流程。当前隔离由 API 查询实现，未配置数据库 RLS。
-2. 按 `.env.example` 设置 `NODE_ENV=production`、HTTPS `APP_ORIGIN`、`DATABASE_URL`、`BETTER_AUTH_SECRET`、`CREDENTIAL_KEY`、真实 `BOOTSTRAP_ADMIN_EMAIL`、`SMTP_HOST` 和 `MAIL_FROM`。按邮件服务填写认证、端口及 TLS。
+2. 按 `.env.example` 设置 `NODE_ENV=production`、HTTPS `APP_ORIGIN`、`DATABASE_URL`、`BETTER_AUTH_SECRET`、`CREDENTIAL_KEY`、真实 `BOOTSTRAP_ADMIN_EMAIL`。SMTP 可以在后台稍后配置，不阻塞管理员首次初始化。
 3. 认证密钥使用至少 32 字符随机值；凭据密钥使用 32 字节随机值的 Base64。密钥不进入前端变量、仓库或截图。
 4. 执行 `npm run build`，再运行 `npm start`。启动时创建认证和业务表、初始化内置模板，首次启动需要建表权限。生产升级前备份并在预发验证，不要多副本同时做首次初始化。
 5. HTTPS 反向代理将同一域名转发至 Node，保留 Origin；不缓存 `/api/`，关闭 SSE 缓冲，允许 120 秒长请求。默认仅绑定回环地址，容器需要时显式配置 `API_HOST` 并控制网络入口。
-6. 管理员验证邮箱、绑定验证器后，再登记体验用户和平台模型。
+6. 在服务器私有路径签发初始化说明：`node --env-file=/etc/luli/luli.env scripts/create-admin-setup.mjs /etc/luli/admin-setup.txt`。管理员本人使用初始化码设置密码并绑定验证器，随后配置邮件服务、登记体验用户和平台模型。
 
-API 默认依据实际 socket 地址做 IP 限流，不盲信请求中的转发 IP。反向代理场景会共享代理 IP 的认证限流；扩大使用规模前，按受信代理链配置客户端 IP 提取，不能直接信任任意 `X-Forwarded-For`。
+API 默认依据实际 socket 地址限流。同机 Apache 会先删除客户端提供的转发 IP 并写入真实地址，此配置下可设置 `TRUST_PROXY_LOOPBACK=true`；服务只接受回环代理传来的单个合法 IP，覆盖内部身份头。不能在未经清理的代理链上启用该设置。
 
 开发 PGlite 不会自动复制进 PostgreSQL。需要保留开发资料时导出 JSON，在正式账号经备份导入/本机迁移流程导入；备份不含模型密钥。
 
-上线仍需实测 SMTP 投递、正式 PostgreSQL、HTTPS Cookie、两台真实设备同步、数据库恢复和真实模型。当前验收使用本机数据库、独立 HTTP 会话、虚构资料和模拟模型，没有发送私人内容到外部模型。
+真实邮件投递、两台用户设备同步和真实模型调用需要在对应服务配置后验证。自动化验收使用独立 HTTP 会话、虚构资料和模拟邮件/模型，不消费正式初始化码，也不发送私人内容。服务器部署记录列出真实 PostgreSQL、HTTPS 和备份恢复检查结果。
 
 ## 代码与验证
 
@@ -97,5 +108,7 @@ npm run build
 ```
 
 测试无需 SMTP、Docker 或外部模型，使用内存 PGlite 和回环端口。`tests/fixtures/cloud-browser.mjs` 是独立浏览器验收的虚构账号环境，不能用于部署。
+
+`tests/admin-setup.test.mjs` 也可通过 `LULI_TEST_DATABASE_URL` 指向空白、独立 PostgreSQL 数据库，名称必须以 `luli_test_` 开头。此测试会创建虚构账号和邮件设置，严禁指向正式数据库。
 
 实现依据：[Better Auth 邮箱验证码](https://better-auth.com/docs/plugins/email-otp)、[二次验证](https://better-auth.com/docs/plugins/2fa)、[PostgreSQL 适配器](https://better-auth.com/docs/adapters/postgresql)、[OWASP 授权](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)、[SSRF 防护](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)。

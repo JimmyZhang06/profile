@@ -12,6 +12,8 @@ import {
   IconArrowRight,
   IconShieldCheck,
   IconRefresh,
+  IconMail,
+  IconLogout,
 } from "@tabler/icons-react";
 import { BrandLogo } from "../BrandLogo.jsx";
 import { ThemeMenu } from "../ThemeMenu.jsx";
@@ -19,7 +21,8 @@ import { useTheme } from "../../hooks/useTheme.js";
 import { Button, Field } from "../ui/index.jsx";
 import { CurvedTabs } from "../ui/CurvedTabs.jsx";
 import { SelectField } from "../ui/SelectField.jsx";
-import { EmailLogin } from "./AccountPage.jsx";
+import { AdminLogin } from "./AdminLogin.jsx";
+import { MailSettings } from "./MailSettings.jsx";
 import { cloudRequest } from "../../lib/cloudClient.js";
 import { ResumeDocument } from "../ResumeDocument.jsx";
 import { initialWorkspace } from "../../lib/workspace.js";
@@ -34,6 +37,7 @@ const sections = [
   ["overview", "运行概览", IconLayoutDashboard],
   ["users", "用户与邀请", IconUsers],
   ["models", "AI 服务", IconPlug],
+  ["mail", "邮件服务", IconMail],
   ["templates", "简历模板", IconLayout],
   ["usage", "使用记录", IconActivity],
   ["audit", "操作记录", IconHistory],
@@ -49,6 +53,10 @@ const auditLabels = {
   "template.publish": "发布模板版本",
   "template.retire": "下架模板",
   "account.delete": "注销账号",
+  "admin.initialize": "初始化管理员",
+  "mail.save": "保存邮件服务",
+  "mail.verify": "验证邮件连接",
+  "mail.test": "发送测试邮件",
 };
 function Badge({ children }) {
   return <span className="admin-badge">{children}</span>;
@@ -155,6 +163,7 @@ function AdminGate({ api, onVerified }) {
     [busy, setBusy] = useState(false),
     [gate, setGate] = useState(null),
     [recovery, setRecovery] = useState(false);
+  const [password, setPassword] = useState("");
   useEffect(() => {
     api("gate")
       .then((value) => {
@@ -167,7 +176,8 @@ function AdminGate({ api, onVerified }) {
     setBusy(true);
     setError("");
     try {
-      const result = await api("setup", { method: "POST", body: {} });
+      const result = await api("setup", { method: "POST", body: { password } });
+      setPassword("");
       setSetup(result);
       const QR = await import("qrcode");
       setQr(await QR.toDataURL(result.totpURI, { margin: 1, width: 192 }));
@@ -203,7 +213,21 @@ function AdminGate({ api, onVerified }) {
       {gate && !gate.enabled && !setup ? (
         <>
           <p>首次使用请绑定验证器。用验证器扫描二维码后，输入当前六位代码。</p>
-          <Button busy={busy} disabled={busy} onClick={begin}>
+          {gate.passwordRequired ? (
+            <Field label="确认管理员密码">
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </Field>
+          ) : null}
+          <Button
+            busy={busy}
+            disabled={busy || (gate.passwordRequired && !password)}
+            onClick={begin}
+          >
             绑定验证器
           </Button>
         </>
@@ -332,9 +356,13 @@ function Overview({ api, navigate }) {
               <div className="admin-notice">
                 <IconShieldCheck size={20} />
                 <div>
-                  <strong>当前使用本机开发邮箱</strong>
+                  <strong>
+                    {data.mailMode === "local-mailbox"
+                      ? "当前使用本机开发邮箱"
+                      : "邮件服务尚未启用"}
+                  </strong>
                   <p>
-                    正式邀请用户前，需要在部署环境配置邮件服务。当前验证码仅写入本机开发邮箱文件。
+                    在邮件服务页面保存发件配置并完成测试后，再邀请用户登录。管理员密码与验证器登录不受影响。
                   </p>
                 </div>
               </div>
@@ -1452,7 +1480,7 @@ export default function AdminApp({ account }) {
           <IconArrowLeft size={16} />
           返回个人工作区
         </a>
-        <EmailLogin admin health={account.health} onSuccess={account.refresh} />
+        <AdminLogin health={account.health} onSuccess={account.refresh} />
       </main>
     );
   if (account.user.role !== "admin")
@@ -1506,6 +1534,14 @@ export default function AdminApp({ account }) {
             <span>个人工作区</span>
           </button>
           <small title={account.user.email}>{account.user.email}</small>
+          <button
+            onClick={() =>
+              navigate(() => perform(() => account.logout(), "已退出登录"))
+            }
+          >
+            <IconLogout size={17} />
+            <span>退出登录</span>
+          </button>
         </div>
       </aside>
       <section className="admin-main">
@@ -1547,6 +1583,8 @@ export default function AdminApp({ account }) {
                 )
               ) : section === "models" ? (
                 <Models {...shared} />
+              ) : section === "mail" ? (
+                <MailSettings {...shared} />
               ) : section === "templates" ? (
                 <Templates {...shared} />
               ) : ["usage", "audit"].includes(section) ? (
