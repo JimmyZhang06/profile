@@ -13,6 +13,7 @@ import "./resume-design.css";
 import "./design-workspace.css";
 import "./account.css";
 import "./profile-library.css";
+import "./sidebar.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

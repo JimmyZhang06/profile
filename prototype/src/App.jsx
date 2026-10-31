@@ -40,7 +40,9 @@ export function App({ workspace, account }) {
   const changeDoc = change => updateDoc(doc.id, change);
   function notify(message) { clearTimeout(timer.current); setToast(message); timer.current = setTimeout(() => setToast(''), 4200); }
   function guard() { if (edit) { notify('请先保存或取消正在编辑的文字'); return false; } if (conflict) return false; return true; }
+  function closeMobileNavigation() { if (window.matchMedia('(max-width: 760px)').matches && latest.current.ui.sidebar) setState(s => ({...s, ui: {...s.ui, sidebar: false}})); }
   function open(name) {
+    closeMobileNavigation();
     if (!guard() || name === page) return;
     if (!currentDoc && ['job', 'versions', 'review', 'source', 'export', 'rename', 'delete'].includes(name)) name = 'new';
     request(() => {
@@ -100,9 +102,10 @@ export function App({ workspace, account }) {
       if (e.name !== 'AbortError' && task.current?.controller === controller) updateDoc(requestDoc.id, d => ({ ...d, messages: d.messages.map(m => m.id === id ? { ...m, status: 'error', error: e.message, proposals: [] } : m) }));
     } finally { writer.dispose(); if (task.current?.controller === controller) { task.current = null; setBusyId(null); } }
   }
-  function selectDocument(id) {
+  function selectDocument(id, destination = null) {
+    closeMobileNavigation();
     if (!guard() || !state.documents.some(d => d.id === id && !d.archived)) return;
-    request(() => { stop(); setState(s => ({ ...s, activeId: id, ui: {...s.ui, sidebar: window.matchMedia('(max-width: 760px)').matches ? false : s.ui.sidebar} })); setSelected(null); setEdit(null); setFocus(false); setMobileView('chat'); finish(null); });
+    request(() => { stop(); setState(s => ({ ...s, activeId: id, ui: {...s.ui, sidebar: window.matchMedia('(max-width: 760px)').matches ? false : s.ui.sidebar} })); setSelected(null); setEdit(null); setFocus(false); setMobileView('chat'); finish(destination); });
   }
   function trashCurrentDocument() {
     if (!currentDoc || !guard()) return;
@@ -170,7 +173,7 @@ export function App({ workspace, account }) {
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, [edit, conflict, page]);
   return <PageNavigationContext.Provider value={{ registerDirty, request, stay, documentTitle: currentDoc?.title || '' }}><main className={'app-shell ' + (page ? 'has-page ' : '') + (state.ui.sidebar ? 'sidebar-open ' : '')}>
-    <Sidebar theme={theme} account={account} state={state} page={page} onHome={() => { if (guard()) navigate(null); }} onToggle={() => setState(s => ({ ...s, ui: { ...s.ui, sidebar: !s.ui.sidebar } }))} onNew={() => open('new')} onOpen={open} onSelect={selectDocument} />
+    <Sidebar saveState={saveState} account={account} state={state} page={page} onHome={() => { closeMobileNavigation(); if (guard()) navigate(null); }} onToggle={() => setState(s => ({ ...s, ui: { ...s.ui, sidebar: !s.ui.sidebar } }))} onNew={() => open('new')} onOpen={open} onSelect={selectDocument} />
     <div className={'work-area mobile-' + mobileView + (focus ? ' canvas-focused' : '')} ref={workArea}>
       {(error || conflict) ? <div className={'workspace-alert' + (workspace.remoteConflict ? ' sync-conflict' : '')} role="alert"><span>{workspace.remoteConflict ? '另一台设备修改了资料。双方内容已保留，请选择如何继续。' : conflict ? '另一窗口更新了这份工作空间。请重新载入后继续。' : error}</span>{workspace.remoteConflict ? <><div className="sync-conflict-versions"><div><strong>这台设备</strong><p>{state.documents.length} 份简历 · {state.library.length} 个项目</p><small>{state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div><div><strong>云端版本 {workspace.remoteConflict.revision}</strong><p>{workspace.remoteConflict.state.documents.length} 份简历 · {workspace.remoteConflict.state.library.length} 个项目</p><small>{workspace.remoteConflict.state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div></div><Button onClick={()=>workspace.resolveConflict('both')}>两个版本都保留</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('local')}>继续使用本机版本</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('cloud')}>使用云端版本</Button></> : null}<Button variant="secondary" onClick={() => downloadFile('履历恢复备份.json', JSON.stringify(state), 'application/json')}>导出当前内容</Button>{conflict && !workspace.cloud ? <Button onClick={() => window.location.reload()}>重新载入</Button> : null}{workspace.cloud && !conflict ? <Button onClick={()=>saveState==='expired'?open('account'):workspace.retry()}>{saveState==='expired'?'重新登录':'重试同步'}</Button> : null}</div> : null}
       {pending ? <div className="page-leave-notice" role="alert"><span>当前页面还有未保存的内容。</span><Button variant="secondary" onClick={stay}>继续编辑</Button><Button variant="ghost" onClick={discard}>放弃更改并离开</Button></div> : null}
@@ -194,7 +197,7 @@ export function App({ workspace, account }) {
     {page === 'review' ? <ReviewPage doc={doc} onBack={() => navigate(null)} onApply={apply} onLocate={locate} /> : null}
     {page === 'source' ? <SourcePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}
     {page === 'export' ? <ExportPage doc={doc} onBack={() => navigate(null)} notify={notify} onPrint={() => { finish(null); setSelected(null); requestAnimationFrame(() => requestAnimationFrame(() => window.print())); }} /> : null}
-    {page === 'rename' ? <RenamePage doc={doc} onBack={() => navigate(null)} onSave={title => { changeDoc(d => ({ ...d, title })); finish(null); }} /> : null}
+    {page === 'rename' ? <RenamePage key={doc.id} doc={doc} onBack={() => navigate(null)} onSave={title => { changeDoc(d => ({ ...d, title })); finish(null); }} /> : null}
       </div>
     </div>
     {toast ? <div className="toast" role="status"><IconCheck size={16} /><span>{toast}</span><IconButton label="关闭提示" onClick={() => setToast('')}><IconX size={14} /></IconButton></div> : null}
