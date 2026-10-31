@@ -45,13 +45,23 @@ work and log directories (`/etc/luli/acme`, `/var/lib/luli-acme`,
 `reload-apache.sh` hook at `/etc/luli/reload-apache.sh` with mode 0755. Enable
 the timer after a successful webroot issuance.
 
-While the custom domain's DNS is pending, the preview hostname is
-`resume-47-93-237-199.sslip.io`. Generate the HTTPS vhost with that hostname in
-place of `resume.jimmyzhang.xyz`. Once DNS is ready, issue an additional
-certificate for the custom domain and install its own HTTPS vhost. Browser
-storage is origin-specific: export a workspace backup from the preview before
-moving to the custom domain, then import it there. No automatic cross-origin
-transfer or cloud upload is performed.
+The custom hostname `resume.jimmyzhang.xyz` is active as of 2026-10-31, with its
+own certificate and HTTPS vhost. `APP_ORIGIN` now uses that hostname. The earlier
+preview `resume-47-93-237-199.sslip.io` retains its separate vhost and certificate
+so existing browser-local workspaces can still be exported. Do not redirect the
+preview away before users can export their data. Both certificates are covered
+by the existing renewal timer.
+
+Browser storage is origin-specific: export a workspace backup from the preview
+before moving to the custom domain, then import it there. No automatic
+cross-origin transfer or cloud upload is performed. Deployment verification is
+recorded in `DOMAIN-2026-10-31.md`.
+
+For a manual renewal rehearsal, pass `--no-random-sleep-on-renew` together with
+`--dry-run --run-deploy-hooks` and the installation's config/work/log directory
+arguments. Otherwise Certbot's non-interactive random delay may exceed a short
+manual validation timeout. The custom hostname passed this complete rehearsal
+on 2026-10-31; ordinary scheduled renewal retains its normal jitter.
 
 ## Cloud activation later
 
