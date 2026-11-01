@@ -5,8 +5,10 @@ unprivileged `luli` systemd service and release directories under `/opt/luli`.
 Only Apache listens publicly. Node binds to `127.0.0.1:4180`.
 
 The latest product release is recorded in
-[AVATAR-DRAWERS-2026-11-01.md](AVATAR-DRAWERS-2026-11-01.md), including personal
-avatars, account and mobile navigation drawers, validation and rollback.
+[WEBAPP-ICONS-2026-11-01.md](WEBAPP-ICONS-2026-11-01.md), including Home Screen
+icons, web app metadata, validation and rollback.
+Personal avatars and contextual drawers are recorded in
+[AVATAR-DRAWERS-2026-11-01.md](AVATAR-DRAWERS-2026-11-01.md).
 Earlier complete-experience and chapter refinements are recorded in
 [EXPERIENCE-2026-11-01.md](EXPERIENCE-2026-11-01.md).
 
