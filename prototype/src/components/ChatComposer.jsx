@@ -1,8 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef } from 'react';
-import { IconArrowUp, IconPlus, IconX, IconSquareFilled, IconFileText, IconBooks, IconBriefcase2, IconSparkles, IconPlug } from '@tabler/icons-react';
+import { IconArrowUp, IconPlus, IconX, IconSquareFilled, IconFileText, IconBooks, IconBriefcase2, IconSparkles, IconPlug, IconEye } from '@tabler/icons-react';
 import { IconButton, Menu } from './ui/index.jsx';
 import { fieldLabel, fieldValue } from '../lib/workspace.js';
 import { modelName } from '../lib/assistant.js';
+import { selectionPreview } from '../lib/experiencePreview.js';
 
 function fitInput(input) {
   if (!input?.clientWidth) return;
@@ -13,6 +14,7 @@ function fitInput(input) {
 export function ChatComposer({ doc, settings, selected, busy, focusKey, active, onSend, onStop, onInput, onRemoveSelection, onOpen, onModel }) {
   const inputRef = useRef(null), hintId = useId();
   const enabled = settings.enabled && settings.capabilities.rewrite;
+  const reference = selected ? selectionPreview(doc.resume, selected) : null;
 
   useEffect(() => { if (active && focusKey) inputRef.current?.focus(); }, [focusKey, active]);
   useLayoutEffect(() => fitInput(inputRef.current), [doc.composer, selected, active]);
@@ -37,7 +39,11 @@ export function ChatComposer({ doc, settings, selected, busy, focusKey, active, 
   return <>
     <form className={'composer ' + (!enabled ? 'composer-disabled' : '')} aria-label="发送对话消息" onSubmit={event => { event.preventDefault(); send(doc.composer); }}>
       {selected ? <div className="composer-selection">
-        <div><IconFileText size={16} /><span>{fieldLabel(doc.resume, selected)}<small>{fieldValue(doc.resume, selected).slice(0, 70)}</small></span></div>
+        <button type="button" className="composer-reference" aria-label={reference.kind === 'experience' ? '预览完整经历' : '预览引用内容'} onClick={() => onOpen('experience')}>
+          <span className="composer-reference-heading"><IconFileText size={15} /><span>{reference.title}</span></span>
+          <span className="composer-reference-excerpt">{fieldValue(doc.resume, selected) || '这段内容尚未填写'}</span>
+          <span className="composer-reference-footer"><span>{reference.kind === 'experience' ? fieldLabel(doc.resume, selected).split(' · ').at(-1) : '当前段落'}</span><span><IconEye size={14} />{reference.kind === 'experience' ? '完整经历' : '查看全文'}</span></span>
+        </button>
         <IconButton label="移除选中的段落" onClick={onRemoveSelection}><IconX size={15} /></IconButton>
       </div> : null}
       <textarea ref={inputRef} aria-label="消息输入框" aria-describedby={hintId}

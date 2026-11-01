@@ -9,7 +9,7 @@
     "start": "node --env-file-if-exists=.env server/api.mjs",
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
-    "test": "node --test tests/workspace.test.mjs tests/navigation.test.mjs tests/documents.test.mjs tests/projects.test.mjs tests/interaction.test.mjs tests/formatting.test.mjs tests/profile.test.mjs tests/cloud.test.mjs tests/cloud-sync.test.mjs tests/deployment.test.mjs tests/admin-setup.test.mjs",
+    "test": "node --test tests/workspace.test.mjs tests/navigation.test.mjs tests/documents.test.mjs tests/projects.test.mjs tests/interaction.test.mjs tests/formatting.test.mjs tests/profile.test.mjs tests/experience-preview.test.mjs tests/cloud.test.mjs tests/cloud-sync.test.mjs tests/deployment.test.mjs tests/admin-setup.test.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "dev:client": "vite",
     "test:cloud": "node --test tests/cloud.test.mjs tests/cloud-sync.test.mjs tests/admin-setup.test.mjs"

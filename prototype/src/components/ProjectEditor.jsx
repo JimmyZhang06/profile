@@ -1,10 +1,14 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { IconCheck, IconListDetails, IconUpload } from '@tabler/icons-react';
+import { IconCheck, IconEye, IconListDetails, IconUpload } from '@tabler/icons-react';
 import { Button, Field, Menu, Page } from './ui/index.jsx';
 import { PageNavigationContext } from '../hooks/usePageNavigation.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { projectDetailFields, projectDetails } from '../lib/projects.js';
 import { uid } from '../lib/workspace.js';
+import { ChapterRail } from './ui/ChapterRail.jsx';
+import { ExperiencePreview } from './ExperiencePreview.jsx';
+import { projectPreview } from '../lib/experiencePreview.js';
+import { useReadingView } from '../hooks/useReadingView.js';
 
 const sections = [
   { id: 'basics', title: '基本信息', fields: [] },
@@ -16,7 +20,7 @@ const sections = [
 ];
 
 function fitMaterialTextArea(element) {
-  if (!element) return;
+  if (!element?.clientWidth) return;
   element.style.height = 'auto';
   element.style.height = Math.min(element.scrollHeight + 2, 480) + 'px';
 }
@@ -28,7 +32,7 @@ export function MaterialTextArea({ value, ...props }) {
     let lastWidth = 0;
     const observer = new ResizeObserver(entries => {
       const width = entries[0].contentRect.width;
-      if (width !== lastWidth) { lastWidth = width; fitMaterialTextArea(ref.current); }
+      if (width > 0 && width !== lastWidth) { lastWidth = width; fitMaterialTextArea(ref.current); }
     });
     observer.observe(ref.current);
     return () => observer.disconnect();
@@ -46,6 +50,7 @@ export function ProjectRecord({ project }) {
 export function ProjectEditor({ project, selectionDirty, onCancel, onSave }) {
   const navigation = useContext(PageNavigationContext), fileRef = useRef(null), headings = useRef({});
   const isMobile = useMediaQuery('(max-width: 760px)');
+  const { reading, openReading, closeReading } = useReadingView();
   const [initial] = useState(() => ({
     ...(project || { name: '', role: '', date: '', tags: [], facts: [] }),
     tags: project?.tags.join('、') || '', facts: project?.facts.join('\n') || '', details: projectDetails(project),
@@ -56,13 +61,14 @@ export function ProjectEditor({ project, selectionDirty, onCancel, onSave }) {
     if (!scroll) return;
     const update = () => {
       const top = scroll.getBoundingClientRect().top + (isMobile ? 88 : 70);
-      const section = [...sections].reverse().find(item => headings.current[item.id]?.getBoundingClientRect().top <= top);
+      const section = [...sections].reverse().find(item => headings.current[item.id]?.getClientRects().length && headings.current[item.id].getBoundingClientRect().top <= top);
       setActiveSection(section?.id || 'basics');
     };
+    if (reading) return;
     update();
     scroll.addEventListener('scroll', update, { passive: true });
     return () => scroll.removeEventListener('scroll', update);
-  }, [isMobile]);
+  }, [isMobile, reading]);
   const changed = JSON.stringify(draft) !== JSON.stringify(initial);
   const filled = Object.values(draft.details).filter(value => value.trim()).length;
   const canSave = draft.name.trim() && (draft.facts.trim() || filled);
@@ -97,10 +103,11 @@ export function ProjectEditor({ project, selectionDirty, onCancel, onSave }) {
       setError('');
     } catch { setError('读取失败，可以直接粘贴文字。'); }
   }
-  return <Page title={project ? '编辑项目资料' : '记录一段完整经历'} description="把经过和证据留在这里。面向不同岗位时，再从中选择适合写进简历的内容。"
-    className="page-wide project-editor-page" onBack={cancel} backLabel="返回素材库" dirty={changed || selectionDirty}
-    footer={<><span className="footer-note">保存到素材库，不会覆盖已有简历</span><div className="project-footer-actions"><Button variant="ghost" onClick={cancel}>取消</Button><Button disabled={!canSave} onClick={save}>保存项目资料<IconCheck size={15} /></Button></div></>}>
-    <div className="project-editor-layout">
+  return <Page title={reading ? '完整经历预览' : project ? '编辑项目资料' : '记录一段完整经历'} description={reading ? '以一份完整记录，查看这段经历的来龙去脉。' : '把经过和证据留在这里。面向不同岗位时，再从中选择适合写进简历的内容。'}
+    className={'page-wide project-editor-page' + (reading ? ' experience-previewing' : '')} onBack={reading ? closeReading : cancel} backLabel={reading ? '返回编辑' : '返回素材库'} dirty={changed || selectionDirty}
+    footer={<><span className="footer-note">{reading && changed ? '正在预览未保存的草稿' : '保存到素材库，不会覆盖已有简历'}</span><div className="project-footer-actions"><Button variant="secondary" onClick={reading ? closeReading : event => openReading(true, event)}>{!reading ? <IconEye size={16} /> : null}{reading ? '继续编辑' : '完整预览'}</Button><Button disabled={!canSave} onClick={save}>保存项目资料<IconCheck size={15} /></Button></div></>}>
+    {reading ? <ExperiencePreview model={projectPreview(draft)} label={changed ? '当前编辑草稿 · 尚未保存' : '项目素材 · 完整经历'} /> : null}
+    <div className="project-editor-layout experience-hidden" hidden={!!reading}>
       <div className="project-mobile-navigation">
         <Menu label="选择项目章节" className="project-section-menu" icon={<IconListDetails size={18} />} value={sections.find(section => section.id === activeSection).title} items={sections.map((section, index) => ({
           label: String(index + 1).padStart(2, '0') + ' ' + section.title,
@@ -109,10 +116,10 @@ export function ProjectEditor({ project, selectionDirty, onCancel, onSave }) {
         }))} />
         <span>已记录 {filled} / 10</span>
       </div>
-      <nav className="project-section-nav" aria-label="项目资料章节">
-        {sections.map((section, index) => <button key={section.id} type="button" aria-current={activeSection === section.id ? 'location' : undefined} onClick={() => jumpToSection(section)}><span>{String(index + 1).padStart(2, '0')}</span>{section.title}</button>)}
+      <aside className="project-section-nav">
+        <ChapterRail items={sections} value={activeSection} onChange={jumpToSection} />
         <p>已记录 {filled} / 10 类资料<br />不必一次填完，随时可以补充。</p>
-      </nav>
+      </aside>
       <div className="project-editor-sections">
         {sections.map(section => <section className="project-detail-section" key={section.id}>
           <h2 tabIndex={-1} ref={element => { headings.current[section.id] = element; }}>{section.title}</h2>

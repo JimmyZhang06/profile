@@ -1,5 +1,5 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react';
-import { IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconChevronDown, IconDots, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconArrowDown, IconArrowRight, IconArrowUp, IconCheck, IconChevronDown, IconDots, IconEye, IconPlus, IconTrash } from '@tabler/icons-react';
 import { PageNavigationContext } from '../hooks/usePageNavigation.js';
 import { contactLabel, contactText, contactTypes, newContact, newRecord, normalizeProfile, profileSelections, recordHasContent, recordSections, syncLegacyFields } from '../lib/profile.js';
 import { Button, EmptyState, Field, IconButton, Menu, Page } from './ui/index.jsx';
@@ -7,6 +7,9 @@ import { SelectField } from './ui/SelectField.jsx';
 import { CurvedTabs } from './ui/CurvedTabs.jsx';
 import { MaterialTextArea } from './ProjectEditor.jsx';
 import { ProjectsPage } from './ProjectsPage.jsx';
+import { ExperiencePreview } from './ExperiencePreview.jsx';
+import { recordPreview } from '../lib/experiencePreview.js';
+import { useReadingView } from '../hooks/useReadingView.js';
 
 const tabs = [
   {key: 'basics', label: '基础资料'},
@@ -44,7 +47,7 @@ function ContactEditor({items, onChange}) {
     {items.some(item => item.visible && item.value.trim()) ? <div className="contact-live-preview"><span>简历中的显示</span><p>{items.filter(item => item.visible && item.value.trim()).map(contactText).join('  ·  ')}</p></div> : null}
   </section>;
 }
-function RecordEditor({section, entries, library, onChange}) {
+function RecordEditor({section, entries, library, onChange, onPreview}) {
   const [expanded, setExpanded] = useState(entries[0]?.id || null), [removing, setRemoving] = useState(null), [removed, setRemoved] = useState(null);
   const id = useId();
   const candidates = library.filter(project => !project.archived && (section.key === 'researchEntries' ? /研究/.test(project.tags.join(' ')) : section.key === 'workEntries' ? /实习经历|工作经历/.test(project.tags.join(' ')) : false));
@@ -59,6 +62,7 @@ function RecordEditor({section, entries, library, onChange}) {
       const open = expanded === entry.id, update = patch => onChange(entries.map(item => item.id === entry.id ? {...item, ...patch} : item));
       return <article className={'profile-record-card ' + (open ? 'is-open' : '')} key={entry.id}>
         <header className="profile-record-summary"><span className="profile-record-number">{String(index + 1).padStart(2, '0')}</span><button type="button" aria-expanded={open} aria-controls={id + entry.id} onClick={() => setExpanded(open ? null : entry.id)}><span><strong>{entry.organization || '未命名' + section.singular}</strong><small>{[entry.title, entry.period].filter(Boolean).join(' · ') || '填写名称、时间与经历细节'}</small></span><IconChevronDown size={17} /></button><div className="record-order-actions"><IconButton label={'上移第 ' + (index + 1) + ' 条经历'} disabled={!index} onClick={() => onChange(move(entries, entry.id, -1))}><IconArrowUp size={16} /></IconButton><IconButton label={'下移第 ' + (index + 1) + ' 条经历'} disabled={index === entries.length - 1} onClick={() => onChange(move(entries, entry.id, 1))}><IconArrowDown size={16} /></IconButton></div></header>
+        <div className="record-preview-row"><span>{entry.visible ? '默认选入新简历' : '仅保留在资料库'}</span><button type="button" aria-label={'完整预览：' + (entry.organization || '未命名经历')} onClick={event => onPreview(entry.id, event)}><IconEye size={16} />完整预览</button></div>
         {open ? <div className="profile-record-fields" id={id + entry.id}>
           <div className="field-grid"><Field label={section.organization}><input value={entry.organization} onChange={event => update({organization: event.target.value})} /></Field><Field label={section.title}><input value={entry.title} onChange={event => update({title: event.target.value})} /></Field></div>
           <Field label="起止时间" hint="支持月份或自由填写，例如 2025.07—2025.09、2026.07—至今。"><input className="profile-period" value={entry.period} placeholder="开始时间—结束时间" onChange={event => update({period: event.target.value})} /></Field>
@@ -66,7 +70,7 @@ function RecordEditor({section, entries, library, onChange}) {
           {entry.sourceProjectId ? <p className="quiet-note">已从项目素材复制；原素材仍保留，两处内容独立编辑。</p> : null}
           <div className="record-bottom-actions"><label className="profile-checkbox"><input type="checkbox" checked={entry.visible} onChange={event => update({visible: event.target.checked})} /><span>新建简历时默认选入</span></label><Button variant="ghost" onClick={() => setRemoving(entry.id)}><IconTrash size={15} />移除经历</Button></div>
           {removing === entry.id ? <div className="profile-inline-notice" role="alert"><span>从资料库移除这段经历？已创建的简历会保留原内容。</span><Button variant="ghost" onClick={() => setRemoving(null)}>取消</Button><Button variant="secondary" onClick={() => {setRemoved({entry, index}); onChange(entries.filter(item => item.id !== entry.id)); setRemoving(null);}}>移除</Button></div> : null}
-        </div> : <div className="profile-record-status">{entry.visible ? '默认选入新简历' : '仅保留在资料库'}{entry.description ? ' · 已填写经历内容' : ' · 内容待补充'}</div>}
+        </div> : null}
       </article>;
     })}</div>
     {!entries.length ? <EmptyState icon={<IconPlus size={24} />} title={'记录第一段' + section.singular} action={<Button variant="secondary" onClick={add}>添加{section.singular}</Button>}>每段经历独立保存，之后可以为不同岗位挑选。</EmptyState> : null}
@@ -90,6 +94,7 @@ function ApplyProfilePage({profile, doc, tab, onBack, onApply}) {
 
 export function LibraryPage({profile, library, doc, initialTab = 'basics', onBack, onSaveProfile, onApplyProfile, projectProps, saveState, hasActiveDocument = true}) {
   const navigation = useContext(PageNavigationContext);
+  const { reading, openReading, closeReading } = useReadingView();
   const tabsId = useId(), focusTabs = useRef(false);
   const [baseline, setBaseline] = useState(() => ({source: JSON.stringify(profile), draft: normalizeProfile(profile)}));
   const [draft, setDraft] = useState(() => baseline.draft), [tab, setTab] = useState(initialTab), [review, setReview] = useState(false), [saved, setSaved] = useState(false);
@@ -113,10 +118,11 @@ export function LibraryPage({profile, library, doc, initialTab = 'basics', onBac
   if (tab === 'projects') return <ProjectsPage {...projectProps} library={library} doc={doc} onBack={onBack} libraryNavigation={nav} libraryTabsId={tabsId} />;
   const section = recordSections.find(item => item.key === tab);
   const stateLabel = ({syncing: '正在同步', synced: '已同步到云端', saved: '已保存到本机', saving: '正在保存', offline: '本机草稿已保留', expired: '等待重新登录', error: '保存失败，请查看提示'})[saveState] || '资料保存在当前工作区';
-  return <Page title="资料库" description="把经历完整记下来，再为每次投递选择合适的内容。" className="page-wide profile-library-page" onBack={onBack} dirty={dirty} navigation={nav} footer={<><span className="footer-note" role="status">{dirty ? '有未保存的资料' : saved ? stateLabel : hasActiveDocument ? '保存资料不会自动改动已有简历' : '资料可独立保存，新建简历后再应用'}</span><div className="profile-footer-actions"><Button variant="secondary" disabled={externalChanged || !hasActiveDocument} title={!hasActiveDocument ? "先新建简历，再应用资料" : undefined} onClick={() => {if (save()) setReview(true);}}>更新到简历<IconArrowRight size={16} /></Button><Button disabled={!dirty || externalChanged} onClick={save}>保存资料</Button></div></>}>
-    <div className="library-tab-panel" role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}-tab`}>
+  return <Page title={reading ? '完整经历预览' : '资料库'} description="把经历完整记下来，再为每次投递选择合适的内容。" className={'page-wide profile-library-page' + (reading ? ' experience-previewing' : '')} onBack={reading ? closeReading : onBack} backLabel={reading ? '返回编辑' : '返回简历'} dirty={dirty} navigation={<div className="experience-hidden" hidden={!!reading}>{nav}</div>} footer={<><span className="footer-note" role="status">{dirty ? '有未保存的资料' : saved ? stateLabel : hasActiveDocument ? '保存资料不会自动改动已有简历' : '资料可独立保存，新建简历后再应用'}</span><div className="profile-footer-actions">{reading ? <Button variant="secondary" onClick={closeReading}>继续编辑</Button> : <Button variant="secondary" disabled={externalChanged || !hasActiveDocument} title={!hasActiveDocument ? "先新建简历，再应用资料" : undefined} onClick={() => {if (save()) setReview(true);}}>更新到简历<IconArrowRight size={16} /></Button>}<Button disabled={!dirty || externalChanged} onClick={save}>保存资料</Button></div></>}>
     {externalChanged && dirty ? <div className="profile-inline-notice" role="alert"><span>资料已在其他位置更新，当前编辑仍保留。请先核对最新资料。</span><Button variant="secondary" onClick={() => navigation?.request(reset)}>放弃本次编辑并载入最新资料</Button></div> : null}
-    {tab === 'basics' ? <><section className="profile-form-section"><Field label="简历姓名" hint="登录邮箱和账号安全请在“账号与安全”中管理。"><input className="profile-name-input" autoComplete="name" value={draft.name} onChange={event => setDraft(old => ({...old, name: event.target.value}))} placeholder="你希望在简历中使用的姓名" /></Field></section><ContactEditor items={draft.contactItems} onChange={contactItems => setDraft(old => ({...old, contactItems}))} /><section className="profile-form-section"><header><div><h2>简介与能力</h2><p>作为新简历的基础表达，之后可以针对岗位单独修改。</p></div></header><Field label="个人简介"><MaterialTextArea rows={3} value={draft.summary} onChange={event => setDraft(old => ({...old, summary: event.target.value}))} /></Field><Field label="专业能力"><MaterialTextArea rows={3} value={draft.skills} onChange={event => setDraft(old => ({...old, skills: event.target.value}))} /></Field></section></> : <RecordEditor key={tab} section={section} entries={draft[tab]} library={library} onChange={entries => setDraft(old => ({...old, [tab]: entries}))} />}
+    {reading ? <ExperiencePreview model={recordPreview(draft[tab].find(entry => entry.id === reading), section)} label={dirty ? '当前编辑草稿 · 尚未保存' : '资料库 · 完整经历'} /> : null}
+    <div className="library-tab-panel experience-hidden" hidden={!!reading} role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}-tab`}>
+    {tab === 'basics' ? <><section className="profile-form-section"><Field label="简历姓名" hint="登录邮箱和账号安全请在“账号与安全”中管理。"><input className="profile-name-input" autoComplete="name" value={draft.name} onChange={event => setDraft(old => ({...old, name: event.target.value}))} placeholder="你希望在简历中使用的姓名" /></Field></section><ContactEditor items={draft.contactItems} onChange={contactItems => setDraft(old => ({...old, contactItems}))} /><section className="profile-form-section"><header><div><h2>简介与能力</h2><p>作为新简历的基础表达，之后可以针对岗位单独修改。</p></div></header><Field label="个人简介"><MaterialTextArea rows={3} value={draft.summary} onChange={event => setDraft(old => ({...old, summary: event.target.value}))} /></Field><Field label="专业能力"><MaterialTextArea rows={3} value={draft.skills} onChange={event => setDraft(old => ({...old, skills: event.target.value}))} /></Field></section></> : <RecordEditor key={tab} section={section} entries={draft[tab]} library={library} onPreview={openReading} onChange={entries => setDraft(old => ({...old, [tab]: entries}))} />}
     </div>
   </Page>;
 }

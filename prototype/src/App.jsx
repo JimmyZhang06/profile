@@ -8,6 +8,7 @@ import { WorkspaceHeader } from './components/WorkspaceHeader.jsx';
 import { SplitWorkspace } from './components/SplitWorkspace.jsx';
 import { JobPage, NewDocumentPage, SettingsPage, VersionsPage, ReviewPage, SourcePage, ExportPage, RenamePage } from './components/Pages.jsx';
 import { LibraryPage } from './components/LibraryPage.jsx';
+import { SelectedExperiencePage } from './components/ExperiencePreview.jsx';
 import { DeleteDocumentPage, DocumentTrashPage, EmptyDocuments } from './components/DocumentTrash.jsx';
 import { Button, IconButton } from './components/ui/index.jsx';
 import { AccountPage } from './components/account/AccountPage.jsx';
@@ -64,7 +65,7 @@ export function App({ workspace, account }) {
   function open(name) {
     closeMobileNavigation();
     if (!guard() || name === page) return;
-    if (!currentDoc && ['job', 'versions', 'review', 'source', 'export', 'rename', 'delete'].includes(name)) name = 'new';
+    if (!currentDoc && ['job', 'versions', 'review', 'source', 'experience', 'export', 'rename', 'delete'].includes(name)) name = 'new';
     request(() => {
       finish(name);
       if (window.matchMedia('(min-width: 761px) and (max-width: 1180px)').matches) setState(s => ({ ...s, ui: { ...s.ui, sidebar: false } }));
@@ -80,8 +81,8 @@ export function App({ workspace, account }) {
   const previousPage = useRef(null);
   useEffect(() => {
     const titles = { account: '账号与安全', library: '资料库', projects: '资料库', job: '目标岗位', profile: '资料库', new: '新建简历', settings: '设置', versions: '版本记录', review: '修改记录', source: '原始依据', export: '导出简历', rename: '重命名简历', delete: '删除简历', trash: '回收站' };
-    document.title = page ? titles[page] + ' · 履历' : '履历 · 简历工作空间';
-    if (previousPage.current && !page) workArea.current?.querySelector('.document-title-menu button')?.focus({ preventScroll: true });
+    document.title = page ? (page === 'experience' ? '完整经历预览' : titles[page]) + ' · 履历' : '履历 · 简历工作空间';
+    if (previousPage.current && !page) workArea.current?.querySelector(previousPage.current === 'experience' ? '.composer-reference' : '.document-title-menu button')?.focus({ preventScroll: true });
     previousPage.current = page;
   }, [page]);
   useEffect(() => {
@@ -218,6 +219,7 @@ export function App({ workspace, account }) {
     {page === 'versions' ? <VersionsPage doc={doc} onBack={() => navigate(null)} onSave={saveVersion} onRestore={version => { stop(); changeDoc(d => ({ ...mutateResume(d, clone(version.resume), '恢复版本'), job: clone(version.job || d.job), versions: [...d.versions, { id: uid(), name: '恢复前自动保存', time: Date.now(), resume: clone(d.resume), job: clone(d.job) }] })); finish(null); setSelected(null); notify('已恢复版本，原草稿已另存'); }} /> : null}
     {page === 'review' ? <ReviewPage doc={doc} onBack={() => navigate(null)} onApply={apply} onLocate={locate} /> : null}
     {page === 'source' ? <SourcePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}
+    {page === 'experience' ? <SelectedExperiencePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}
     {page === 'export' ? <ExportPage doc={doc} onBack={() => navigate(null)} notify={notify} onPrint={() => { finish(null); setSelected(null); requestAnimationFrame(() => requestAnimationFrame(() => window.print())); }} /> : null}
     {page === 'rename' ? <RenamePage key={doc.id} doc={doc} onBack={() => navigate(null)} onSave={title => { changeDoc(d => ({ ...d, title })); finish(null); }} /> : null}
       </div>
