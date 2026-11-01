@@ -5,8 +5,8 @@ unprivileged `luli` systemd service and release directories under `/opt/luli`.
 Only Apache listens publicly. Node binds to `127.0.0.1:4180`.
 
 The latest product release is recorded in
-[PROFILE-2026-10-31.md](PROFILE-2026-10-31.md), including structured-profile
-compatibility and rollback requirements.
+[EXPERIENCE-2026-11-01.md](EXPERIENCE-2026-11-01.md), including complete experience
+previews, transparent chapter selection, validation and rollback requirements.
 
 ## Release preparation
 
@@ -28,6 +28,13 @@ in `prototype/` and every production setting in `prototype/.env.example`.
    privileges to `luli`.
 5. Run `systemctl daemon-reload` and `systemctl enable --now luli`.
 6. Verify `curl --fail http://127.0.0.1:4180/api/cloud/health`.
+
+Create public release directories with explicit mode 0755. A private deployment
+umask may otherwise leave the release root or an implicitly created `dist`
+parent at mode 0700, which blocks the `luli` service account. Before switching
+the symlink, run the entry-point check and read all built assets as `luli`.
+Keep `/etc/luli` configuration and `/var/backups/luli` private; code readability
+does not require changing their permissions.
 
 ## Domain and TLS
 
