@@ -24,6 +24,9 @@
 }
 .select-field-options::-webkit-scrollbar { display: none; }
 .select-field-options.opens-up { top: auto; bottom: calc(100% + 7px); }
+.select-field-options.select-field-viewport-menu { position: fixed; z-index: 150; inset: auto; }
+.select-field-viewport-menu .select-field-option { min-height: 44px; }
+.select-field-viewport-menu .select-field-option strong { font-size: 15px; }
 .select-field-option { display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 9px 11px; border-radius: 7px; cursor: pointer; color: var(--text-primary); }
 .select-field-option > span { flex: 1; min-width: 0; }
 .select-field-option strong { display: block; font-size: 14px; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
@@ -35,3 +38,4 @@
   .select-field-control { max-width: none; }
   .select-field-trigger { min-height: 46px; font-size: 16px; }
 }
+@media print { .select-field-viewport-menu { display: none !important; } }

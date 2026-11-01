@@ -2,7 +2,7 @@ import { Children, useEffect, useRef, useState } from 'react';
 import { DEFAULT_CHAT_RATIO } from '../lib/workspace.js';
 import { clampPanelRatio, panelBounds } from '../lib/panels.js';
 
-export function SplitWorkspace({ ratio, onRatioChange, children, inert, tools }) {
+export function SplitWorkspace({ ratio, onRatioChange, children, inert, tools, mobileDesignPreview }) {
   const area = useRef(null), drag = useRef(null), frame = useRef(null);
   const [width, setWidth] = useState(0), [draft, setDraft] = useState(null);
   const [chat, preview] = Children.toArray(children);
@@ -27,7 +27,7 @@ export function SplitWorkspace({ ratio, onRatioChange, children, inert, tools })
     if (event.currentTarget.hasPointerCapture(pointerId)) event.currentTarget.releasePointerCapture(pointerId);
   }
   function reset() { onRatioChange(DEFAULT_CHAT_RATIO); }
-  return <div ref={area} className={'work-panels' + (tools ? ' design-layout' : '') + (draft !== null ? ' is-resizing' : '')} inert={inert} style={{ '--chat-share': current * 100 + '%' }}>
+  return <div ref={area} className={'work-panels' + (tools ? ' design-layout' : '') + (mobileDesignPreview ? ' mobile-design-preview' : '') + (draft !== null ? ' is-resizing' : '')} inert={inert} style={{ '--chat-share': current * 100 + '%' }}>
     {tools}
     {chat}
     <div className="split-handle" role="separator" tabIndex={0}

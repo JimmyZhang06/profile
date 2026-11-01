@@ -1,7 +1,8 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { IconCheck, IconUpload } from '@tabler/icons-react';
-import { Button, Field, Page } from './ui/index.jsx';
+import { IconCheck, IconListDetails, IconUpload } from '@tabler/icons-react';
+import { Button, Field, Menu, Page } from './ui/index.jsx';
 import { PageNavigationContext } from '../hooks/usePageNavigation.js';
+import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { projectDetailFields, projectDetails } from '../lib/projects.js';
 import { uid } from '../lib/workspace.js';
 
@@ -44,6 +45,7 @@ export function ProjectRecord({ project }) {
 
 export function ProjectEditor({ project, selectionDirty, onCancel, onSave }) {
   const navigation = useContext(PageNavigationContext), fileRef = useRef(null), headings = useRef({});
+  const isMobile = useMediaQuery('(max-width: 760px)');
   const [initial] = useState(() => ({
     ...(project || { name: '', role: '', date: '', tags: [], facts: [] }),
     tags: project?.tags.join('、') || '', facts: project?.facts.join('\n') || '', details: projectDetails(project),
@@ -53,18 +55,25 @@ export function ProjectEditor({ project, selectionDirty, onCancel, onSave }) {
     const scroll = headings.current.basics?.closest('.page-scroll');
     if (!scroll) return;
     const update = () => {
-      const top = scroll.getBoundingClientRect().top + 70;
+      const top = scroll.getBoundingClientRect().top + (isMobile ? 88 : 70);
       const section = [...sections].reverse().find(item => headings.current[item.id]?.getBoundingClientRect().top <= top);
       setActiveSection(section?.id || 'basics');
     };
+    update();
     scroll.addEventListener('scroll', update, { passive: true });
     return () => scroll.removeEventListener('scroll', update);
-  }, []);
+  }, [isMobile]);
   const changed = JSON.stringify(draft) !== JSON.stringify(initial);
   const filled = Object.values(draft.details).filter(value => value.trim()).length;
   const canSave = draft.name.trim() && (draft.facts.trim() || filled);
   const change = (key, value) => setDraft(old => ({ ...old, [key]: value }));
   const cancel = () => changed && navigation ? navigation.request(onCancel) : onCancel();
+  function jumpToSection(section) {
+    const heading = headings.current[section.id];
+    setActiveSection(section.id);
+    heading?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    heading?.focus({ preventScroll: true });
+  }
   function save() {
     if (!canSave) return;
     navigation?.stay();
@@ -92,19 +101,23 @@ export function ProjectEditor({ project, selectionDirty, onCancel, onSave }) {
     className="page-wide project-editor-page" onBack={cancel} backLabel="返回素材库" dirty={changed || selectionDirty}
     footer={<><span className="footer-note">保存到素材库，不会覆盖已有简历</span><div className="project-footer-actions"><Button variant="ghost" onClick={cancel}>取消</Button><Button disabled={!canSave} onClick={save}>保存项目资料<IconCheck size={15} /></Button></div></>}>
     <div className="project-editor-layout">
+      <div className="project-mobile-navigation">
+        <Menu label="选择项目章节" className="project-section-menu" icon={<IconListDetails size={18} />} value={sections.find(section => section.id === activeSection).title} items={sections.map((section, index) => ({
+          label: String(index + 1).padStart(2, '0') + ' ' + section.title,
+          icon: <IconCheck size={16} aria-hidden="true" style={{ visibility: activeSection === section.id ? 'visible' : 'hidden' }} />,
+          onClick: () => jumpToSection(section),
+        }))} />
+        <span>已记录 {filled} / 10</span>
+      </div>
       <nav className="project-section-nav" aria-label="项目资料章节">
-        {sections.map((section, index) => <button key={section.id} type="button" aria-current={activeSection === section.id ? 'location' : undefined} onClick={() => {
-          const heading = headings.current[section.id];
-          heading?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-          heading?.focus({ preventScroll: true });
-        }}><span>{String(index + 1).padStart(2, '0')}</span>{section.title}</button>)}
+        {sections.map((section, index) => <button key={section.id} type="button" aria-current={activeSection === section.id ? 'location' : undefined} onClick={() => jumpToSection(section)}><span>{String(index + 1).padStart(2, '0')}</span>{section.title}</button>)}
         <p>已记录 {filled} / 10 类资料<br />不必一次填完，随时可以补充。</p>
       </nav>
       <div className="project-editor-sections">
         {sections.map(section => <section className="project-detail-section" key={section.id}>
           <h2 tabIndex={-1} ref={element => { headings.current[section.id] = element; }}>{section.title}</h2>
           {section.id === 'basics' ? <div className="field-grid">
-            <Field label="项目名称"><input autoFocus value={draft.name} onChange={event => change('name', event.target.value)} placeholder="例如：会员权益优化" maxLength={160} /></Field>
+            <Field label="项目名称"><input autoFocus={!isMobile} value={draft.name} onChange={event => change('name', event.target.value)} placeholder="例如：会员权益优化" maxLength={160} /></Field>
             <Field label="我的角色"><input value={draft.role} onChange={event => change('role', event.target.value)} placeholder="例如：用户运营 / 项目负责人" maxLength={160} /></Field>
             <Field label="起止时间"><input value={draft.date} onChange={event => change('date', event.target.value)} placeholder="2025.03 — 2025.08" maxLength={80} /></Field>
             <Field label="能力标签"><input value={draft.tags} onChange={event => change('tags', event.target.value)} placeholder="用户分层、数据分析、项目推进" maxLength={500} /></Field>

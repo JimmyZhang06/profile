@@ -12,6 +12,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconLoader2,
+  IconMenu2,
 } from "@tabler/icons-react";
 import { PageNavigationContext } from "../../hooks/usePageNavigation.js";
 import "./menu.css";
@@ -88,6 +89,7 @@ export function Page({
         <span className="page-document-title" title={navigation?.documentTitle}>
           {navigation?.documentTitle}
         </span>
+        {navigation?.openNavigation ? <IconButton className="mobile-navigation-button" label="打开简历列表" onClick={navigation.openNavigation}><IconMenu2 size={21} /></IconButton> : null}
       </header>
       <div className="page-scroll">
         <div className="page-content">

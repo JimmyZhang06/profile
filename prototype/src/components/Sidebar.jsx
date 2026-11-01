@@ -3,10 +3,10 @@ import { IconLayoutSidebar, IconEdit, IconSearch, IconBooks, IconSettings, IconF
 import { IconButton, Menu } from './ui/index.jsx';
 import { BrandLogo } from './BrandLogo.jsx';
 
-export function Sidebar({ state, saveState, account, page, onHome, onToggle, onNew, onOpen, onSelect }) {
+export function Sidebar({ state, saveState, account, page, isMobile, sidebarOpen = state.ui.sidebar, onHome, onToggle, onNew, onOpen, onSelect }) {
   const [search, setSearch] = useState('');
   const searchInput = useRef(null);
-  const expanded = state.ui.sidebar;
+  const expanded = sidebarOpen;
   const query = search.trim().toLocaleLowerCase();
   const docs = state.documents.filter(doc => !doc.archived && [doc.title, doc.job.company, doc.job.title].join(' ').toLocaleLowerCase().includes(query));
   const trashCount = state.documents.filter(doc => doc.archived).length;
@@ -23,7 +23,7 @@ export function Sidebar({ state, saveState, account, page, onHome, onToggle, onN
   return <aside className={'sidebar ' + (expanded ? 'expanded' : '')} aria-label="我的工作空间">
     <div className="sidebar-top">
       <button type="button" className="wordmark" aria-label="返回当前简历" onClick={onHome}><BrandLogo expanded={expanded} /></button>
-      {expanded ? <IconButton label="收起侧栏" onClick={onToggle}><IconLayoutSidebar size={19} /></IconButton> : null}
+      {expanded ? <IconButton label={isMobile ? '返回当前页面' : '收起侧栏'} onClick={onToggle}>{isMobile ? <IconX size={21} /> : <IconLayoutSidebar size={19} />}</IconButton> : null}
     </div>
     <nav className="sidebar-nav" aria-label="工作区导航">
       {!expanded ? <IconButton label="展开侧栏" onClick={onToggle}><IconLayoutSidebar size={20} stroke={1.65} /></IconButton> : null}

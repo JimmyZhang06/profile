@@ -256,11 +256,16 @@
   margin-top: 20px;
 }
 .account-profile {
-  display: flex;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 12px 18px;
   align-items: center;
   padding-bottom: 30px;
 }
+.account-profile > .account-login-email { grid-column: 2; min-width: 0; }
+.account-login-email > span { display: block; margin-bottom: 5px; font-size: 12px; color: var(--text-secondary); }
+.account-profile .account-login-email > p { display: block; font-size: 15px; line-height: 1.7; color: var(--text-primary); overflow-wrap: anywhere; }
+.account-profile > .account-logout { grid-column: 3; grid-row: 1; align-self: center; }
 .account-avatar {
   display: grid;
   place-items: center;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { IconCheck, IconX } from '@tabler/icons-react';
+import { IconArrowLeft, IconCheck, IconEye, IconMenu2, IconX } from '@tabler/icons-react';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Chat } from './components/Chat.jsx';
 import { Canvas } from './components/Canvas.jsx';
@@ -13,6 +13,7 @@ import { Button, IconButton } from './components/ui/index.jsx';
 import { AccountPage } from './components/account/AccountPage.jsx';
 import { cloudRequest } from './lib/cloudClient.js';
 import { useTheme } from './hooks/useTheme.js';
+import { useMediaQuery } from './hooks/useMediaQuery.js';
 import { PageNavigationContext, usePageNavigation } from './hooks/usePageNavigation.js';
 import { acceptedProposal, clone, downloadFile, fieldLabel, fieldValue, makeDocument, mutateResume, proposalState, setField, uid, undoDocument, validWorkspace } from './lib/workspace.js';
 import { runAssistant } from './lib/assistant.js';
@@ -26,6 +27,7 @@ import { activeDocument, moveDocumentToTrash, restoreDocument } from './lib/docu
 
 export function App({ workspace, account }) {
   const theme = useTheme();
+  const isMobile = useMediaQuery('(max-width: 760px)');
   const { state, setState, saveState, error, conflict } = workspace;
   const [catalog, setCatalog] = useState(null);
   const [emptyDoc] = useState(() => ({...makeDocument(), title: '尚未创建简历'}));
@@ -33,6 +35,10 @@ export function App({ workspace, account }) {
   const { page, pending, registerDirty, request, navigate, finish, discard, stay } = usePageNavigation();
   const [selected, setSelected] = useState(null), [edit, setEdit] = useState(null), [focus, setFocus] = useState(false), [mobileView, setMobileView] = useState('chat'), [busyId, setBusyId] = useState(null), [toast, setToast] = useState(''), [focusKey, setFocusKey] = useState(0);
   const [designOpen, setDesignOpen] = useState(false);
+  const [mobileDesignPreview, setMobileDesignPreview] = useState(false);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const sidebarOpen = isMobile ? mobileNavigationOpen : state.ui.sidebar;
+  const navigationTrigger = useRef(null), navigationWasOpen = useRef(false);
   const task = useRef(null), timer = useRef(null), workArea = useRef(null), latest = useRef(state);
   latest.current = state;
   const enabled = state.settings.enabled && state.settings.capabilities.rewrite;
@@ -40,14 +46,28 @@ export function App({ workspace, account }) {
   const changeDoc = change => updateDoc(doc.id, change);
   function notify(message) { clearTimeout(timer.current); setToast(message); timer.current = setTimeout(() => setToast(''), 4200); }
   function guard() { if (edit) { notify('请先保存或取消正在编辑的文字'); return false; } if (conflict) return false; return true; }
-  function closeMobileNavigation() { if (window.matchMedia('(max-width: 760px)').matches && latest.current.ui.sidebar) setState(s => ({...s, ui: {...s.ui, sidebar: false}})); }
+  function closeMobileNavigation() { setMobileNavigationOpen(false); }
+  function openNavigation() { navigationTrigger.current = document.activeElement; setMobileNavigationOpen(true); }
+  useEffect(() => {
+    if (!isMobile) return;
+    if (mobileNavigationOpen) document.querySelector('.sidebar-top > .icon-button')?.focus({ preventScroll: true });
+    else if (navigationWasOpen.current && (document.activeElement === document.body || !document.activeElement?.getClientRects().length)) {
+      const target = navigationTrigger.current?.getClientRects().length ? navigationTrigger.current : workArea.current?.querySelector('.mobile-navigation-button');
+      target?.focus({ preventScroll: true });
+    }
+    navigationWasOpen.current = mobileNavigationOpen;
+    const close = event => { if (event.key === 'Escape' && mobileNavigationOpen) { event.preventDefault(); setMobileNavigationOpen(false); } };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [isMobile, mobileNavigationOpen]);
+  useEffect(() => { if (pending) workArea.current?.querySelector('.page-leave-notice button')?.focus({ preventScroll: true }); }, [pending]);
   function open(name) {
     closeMobileNavigation();
     if (!guard() || name === page) return;
     if (!currentDoc && ['job', 'versions', 'review', 'source', 'export', 'rename', 'delete'].includes(name)) name = 'new';
     request(() => {
       finish(name);
-      if (window.matchMedia('(max-width: 1180px)').matches) setState(s => ({ ...s, ui: { ...s.ui, sidebar: false } }));
+      if (window.matchMedia('(min-width: 761px) and (max-width: 1180px)').matches) setState(s => ({ ...s, ui: { ...s.ui, sidebar: false } }));
     });
   }
   function stop() {
@@ -105,7 +125,7 @@ export function App({ workspace, account }) {
   function selectDocument(id, destination = null) {
     closeMobileNavigation();
     if (!guard() || !state.documents.some(d => d.id === id && !d.archived)) return;
-    request(() => { stop(); setState(s => ({ ...s, activeId: id, ui: {...s.ui, sidebar: window.matchMedia('(max-width: 760px)').matches ? false : s.ui.sidebar} })); setSelected(null); setEdit(null); setFocus(false); setMobileView('chat'); finish(destination); });
+    request(() => { stop(); setState(s => ({ ...s, activeId: id })); setSelected(null); setEdit(null); setFocus(false); setDesignOpen(false); setMobileView('chat'); finish(destination); });
   }
   function trashCurrentDocument() {
     if (!currentDoc || !guard()) return;
@@ -123,7 +143,8 @@ export function App({ workspace, account }) {
   function startEdit(field) { if (!guard()) return; const value = fieldValue(doc.resume, field); setSelected(field); setEdit({ field, value, marks: marksForField(doc.resume, field, value) }); }
   function saveEdit() { if (!edit) return; changeDoc(d => mutateResume(d, setField(d.resume, edit.field, edit.value, edit.marks), '编辑' + fieldLabel(d.resume, edit.field))); setEdit(null); notify('文字与格式已保存'); }
   function changeDesign(design) { if (guard() && JSON.stringify(design) !== JSON.stringify(getResumeDesign(doc.resume))) changeDoc(d => mutateResume(d, { ...d.resume, design }, '调整排版与模板')); }
-  function closeDesign() { setDesignOpen(false); workArea.current?.querySelector('.workspace-design-toggle')?.focus({ preventScroll: true }); }
+  function closeDesign() { if (!guard()) return; setDesignOpen(false); workArea.current?.querySelector(isMobile ? '.mobile-design-tab' : '.workspace-design-toggle')?.focus({ preventScroll: true }); }
+  function toggleDesign() { if (designOpen) closeDesign(); else if (guard()) { setDesignOpen(true); setMobileDesignPreview(false); setMobileView('document'); } }
   function locate(field) { if (!guard()) return; setSelected(field); setMobileView('document'); }
   function apply(proposal) {
     if (!guard()) return;
@@ -172,18 +193,19 @@ export function App({ workspace, account }) {
     }
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, [edit, conflict, page]);
-  return <PageNavigationContext.Provider value={{ registerDirty, request, stay, documentTitle: currentDoc?.title || '' }}><main className={'app-shell ' + (page ? 'has-page ' : '') + (state.ui.sidebar ? 'sidebar-open ' : '')}>
-    <Sidebar saveState={saveState} account={account} state={state} page={page} onHome={() => { closeMobileNavigation(); if (guard()) navigate(null); }} onToggle={() => setState(s => ({ ...s, ui: { ...s.ui, sidebar: !s.ui.sidebar } }))} onNew={() => open('new')} onOpen={open} onSelect={selectDocument} />
+  return <PageNavigationContext.Provider value={{ registerDirty, request, stay, openNavigation, documentTitle: currentDoc?.title || '' }}><main className={'app-shell ' + (page ? 'has-page ' : '') + (sidebarOpen ? 'sidebar-open ' : '')}>
+    <Sidebar sidebarOpen={sidebarOpen} isMobile={isMobile} saveState={saveState} account={account} state={state} page={page} onHome={() => { closeMobileNavigation(); if (guard()) navigate(null); }} onToggle={() => isMobile ? setMobileNavigationOpen(value => !value) : setState(s => ({ ...s, ui: { ...s.ui, sidebar: !s.ui.sidebar } }))} onNew={() => open('new')} onOpen={open} onSelect={selectDocument} />
     <div className={'work-area mobile-' + mobileView + (focus ? ' canvas-focused' : '')} ref={workArea}>
       {(error || conflict) ? <div className={'workspace-alert' + (workspace.remoteConflict ? ' sync-conflict' : '')} role="alert"><span>{workspace.remoteConflict ? '另一台设备修改了资料。双方内容已保留，请选择如何继续。' : conflict ? '另一窗口更新了这份工作空间。请重新载入后继续。' : error}</span>{workspace.remoteConflict ? <><div className="sync-conflict-versions"><div><strong>这台设备</strong><p>{state.documents.length} 份简历 · {state.library.length} 个项目</p><small>{state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div><div><strong>云端版本 {workspace.remoteConflict.revision}</strong><p>{workspace.remoteConflict.state.documents.length} 份简历 · {workspace.remoteConflict.state.library.length} 个项目</p><small>{workspace.remoteConflict.state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div></div><Button onClick={()=>workspace.resolveConflict('both')}>两个版本都保留</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('local')}>继续使用本机版本</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('cloud')}>使用云端版本</Button></> : null}<Button variant="secondary" onClick={() => downloadFile('履历恢复备份.json', JSON.stringify(state), 'application/json')}>导出当前内容</Button>{conflict && !workspace.cloud ? <Button onClick={() => window.location.reload()}>重新载入</Button> : null}{workspace.cloud && !conflict ? <Button onClick={()=>saveState==='expired'?open('account'):workspace.retry()}>{saveState==='expired'?'重新登录':'重试同步'}</Button> : null}</div> : null}
       {pending ? <div className="page-leave-notice" role="alert"><span>当前页面还有未保存的内容。</span><Button variant="secondary" onClick={stay}>继续编辑</Button><Button variant="ghost" onClick={discard}>放弃更改并离开</Button></div> : null}
-      {!page && !currentDoc ? <EmptyDocuments onNew={() => open('new')} onTrash={() => open('trash')} count={state.documents.filter(d => d.archived).length} /> : null}
+      {!page && !currentDoc ? <><header className="mobile-empty-header"><IconButton label="打开简历列表" onClick={openNavigation}><IconMenu2 size={21} /></IconButton><span>我的工作空间</span></header><EmptyDocuments onNew={() => open('new')} onTrash={() => open('trash')} count={state.documents.filter(d => d.archived).length} /></> : null}
       <div className="editor-workspace" hidden={!!page || !currentDoc} inert={conflict || undefined}>
-      <WorkspaceHeader doc={doc} saveState={saveState} edit={edit} mobileView={mobileView} onMobileView={view => { if (view === 'chat') setDesignOpen(false); setMobileView(view); }} onOpen={open} onUndo={() => changeDoc(d => undoDocument(d))} onRedo={() => changeDoc(d => undoDocument(d, true))} designOpen={designOpen} onDesignToggle={() => { if (designOpen) closeDesign(); else if (guard()) { setDesignOpen(true); setMobileView('document'); } }} />
-      <SplitWorkspace ratio={state.ui.chatRatio} onRatioChange={chatRatio => setState(s => ({ ...s, ui: { ...s.ui, chatRatio } }))} inert={conflict || undefined} tools={designOpen ? <ResumeDesignPanel catalog={catalog} resume={doc.resume} disabled={!!edit} onChange={changeDesign} onClose={closeDesign} /> : null}>
+      <WorkspaceHeader doc={doc} saveState={saveState} edit={edit} isMobile={isMobile} mobileView={mobileView} onMobileView={view => { if (guard()) { setDesignOpen(false); setMobileView(view); } }} onNavigation={openNavigation} onOpen={open} onUndo={() => changeDoc(d => undoDocument(d))} onRedo={() => changeDoc(d => undoDocument(d, true))} designOpen={designOpen} onDesignToggle={toggleDesign} />
+      <SplitWorkspace ratio={state.ui.chatRatio} onRatioChange={chatRatio => setState(s => ({ ...s, ui: { ...s.ui, chatRatio } }))} mobileDesignPreview={mobileDesignPreview} inert={conflict || undefined} tools={designOpen ? <ResumeDesignPanel catalog={catalog} resume={doc.resume} disabled={!!edit} onChange={changeDesign} onClose={closeDesign} /> : null}>
         <Chat active={!page && !!currentDoc && !designOpen} doc={doc} settings={state.settings} selected={selected} busy={busyId === doc.id} focusKey={focusKey} onSend={send} onStop={stop} onInput={text => changeDoc(d => ({ ...d, composer: text }))} onRemoveSelection={() => selectField(null)} onOpen={open} onApply={apply} onDismiss={(id, proposalId) => changeDoc(d => ({ ...d, messages: d.messages.map(m => m.id === id ? { ...m, dismissed: [...(m.dismissed || []), proposalId] } : m) }))} onSource={field => { if (guard()) { setSelected(field); finish('source'); } }} onLocate={locate} onCopy={copy} onRetry={retryMessage} onModel={changeModel} />
         <Canvas active={!page && !!currentDoc} doc={doc} selected={selected} edit={edit} onSelect={selectField} onEdit={startEdit} onEditChange={draft => setEdit(e => ({ ...e, ...draft }))} onSaveEdit={saveEdit} onCancelEdit={() => setEdit(null)} onAsk={field => { setSelected(field); setDesignOpen(false); setFocus(false); setMobileView('chat'); setFocusKey(k => k + 1); }} onSource={field => { setSelected(field); open('source'); }} onOpen={open} focus={focus} onFocus={() => setFocus(!focus)} enabled={enabled} designOpen={designOpen} />
       </SplitWorkspace>
+      {designOpen && !edit ? <footer className="mobile-design-actions"><Button variant="secondary" onClick={() => setMobileDesignPreview(value => !value)}>{mobileDesignPreview ? <IconArrowLeft size={17} /> : <IconEye size={17} />}{mobileDesignPreview ? '返回设置' : '预览效果'}</Button><Button onClick={closeDesign}><IconCheck size={17} />完成排版</Button></footer> : null}
       </div>
       <div className="workspace-page-host" hidden={!page} inert={conflict || undefined}>
     {page === 'account' ? <AccountPage account={account} workspace={workspace} onBack={()=>navigate(null)}/> : null}

@@ -390,6 +390,8 @@ export function AccountPage({ account, workspace, onBack }) {
     [deleteSent, setDeleteSent] = useState(false);
   const user = account.user,
     own = !!user && user.id === account.owner?.id;
+  const displayName = (own && workspace.state.profile?.name?.trim()) ||
+    (user?.name?.trim() && user.name !== user.email ? user.name.trim() : '个人账号');
   async function load() {
     if (!own) return;
     try {
@@ -470,15 +472,17 @@ export function AccountPage({ account, workspace, onBack }) {
       ) : (
         <>
           <div className="account-profile">
-            <div className="account-avatar">{user.email[0].toUpperCase()}</div>
-            <div>
-              <h2>{user.email}</h2>
+            <div className="account-avatar" aria-hidden="true">{displayName === '个人账号' ? user.email[0].toUpperCase() : Array.from(displayName)[0]}</div>
+            <div className="account-profile-copy">
+              <h2>{displayName}</h2>
               <p>
                 <IconCloud size={15} />
                 个人云工作区{user.role === "admin" ? " · 管理员" : ""}
               </p>
             </div>
+            <div className="account-login-email"><span>登录邮箱</span><p dir="ltr">{user.email.split('@')[0]}<wbr />@{user.email.split('@').slice(1).join('@')}</p></div>
             <Button
+              className="account-logout"
               variant="secondary"
               disabled={busy}
               onClick={() => action(account.logout)}

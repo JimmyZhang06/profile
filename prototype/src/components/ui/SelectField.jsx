@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { IconCheck, IconChevronDown } from '@tabler/icons-react';
 import './select-field.css';
 
 const scrollContainers = '.page-scroll, .design-panel-scroll, .admin-scroll';
 
-export function SelectField({ label, value, options, onChange, disabled = false, className = '' }) {
+export function SelectField({ label, value, options, onChange, disabled = false, className = '', viewportMenu = false }) {
   const id = useId(), root = useRef(null), trigger = useRef(null), list = useRef(null);
   const typeahead = useRef({ query: '', time: 0 });
   const [open, setOpen] = useState(false), [active, setActive] = useState(0);
@@ -18,26 +19,45 @@ export function SelectField({ label, value, options, onChange, disabled = false,
   const place = useCallback(() => {
     const bounds = trigger.current.getBoundingClientRect();
     const scroll = trigger.current.closest(scrollContainers)?.getBoundingClientRect();
+    if (viewportMenu) {
+      const viewport = window.visualViewport;
+      const leftEdge = (viewport?.offsetLeft || 0) + 12, topEdge = (viewport?.offsetTop || 0) + 12;
+      const rightEdge = leftEdge + (viewport?.width || window.innerWidth) - 24;
+      const bottomEdge = topEdge + (viewport?.height || window.innerHeight) - 24;
+      if (!bounds.width || bounds.bottom <= Math.max(topEdge, scroll?.top ?? 0) || bounds.top >= Math.min(bottomEdge, scroll?.bottom ?? Infinity)) { setOpen(false); return; }
+      const above = Math.max(0, bounds.top - topEdge - 7), below = Math.max(0, bottomEdge - bounds.bottom - 7);
+      const desired = Math.min(280, list.current?.scrollHeight || options.length * 48 + 12);
+      const side = below < desired && above > below ? 'up' : 'down';
+      const height = Math.min(desired, side === 'up' ? above : below);
+      const width = Math.min(bounds.width, rightEdge - leftEdge);
+      const next = { side, height, width, left: Math.max(leftEdge, Math.min(bounds.left, rightEdge - width)), top: side === 'up' ? bounds.top - height - 7 : bounds.bottom + 7 };
+      setPosition(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+      return;
+    }
     const below = Math.min(window.innerHeight - 12, scroll?.bottom ?? Infinity) - bounds.bottom - 9;
     const above = bounds.top - Math.max(12, scroll?.top ?? 0) - 9;
     const desired = Math.min(280, options.length * 64 + 12);
     const side = below < desired && above > below ? 'up' : 'down';
     const height = Math.max(56, Math.min(desired, side === 'up' ? above : below));
     setPosition(previous => previous.side === side && previous.height === height ? previous : { side, height });
-  }, [options.length]);
+  }, [options.length, viewportMenu]);
 
   useEffect(() => { if (unavailable) setOpen(false); }, [unavailable]);
   useLayoutEffect(() => {
     if (!expanded) return;
     place();
-    const closeOutside = event => { if (!root.current?.contains(event.target)) setOpen(false); };
+    const closeOutside = event => { if (!root.current?.contains(event.target) && !list.current?.contains(event.target)) setOpen(false); };
     document.addEventListener('pointerdown', closeOutside);
     window.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
     const scroll = trigger.current.closest(scrollContainers);
     scroll?.addEventListener('scroll', place, { passive: true });
     return () => {
       document.removeEventListener('pointerdown', closeOutside);
       window.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('scroll', place);
       scroll?.removeEventListener('scroll', place);
     };
   }, [expanded, place]);
@@ -83,7 +103,16 @@ export function SelectField({ label, value, options, onChange, disabled = false,
     }
   }
 
-  return <div className={'select-field ' + className} ref={root} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+  const optionList = expanded ? <div ref={list} id={`${id}-options`} role="listbox" aria-labelledby={`${id}-label`} className={'select-field-options opens-' + position.side + (viewportMenu ? ' select-field-viewport-menu' : '')} style={viewportMenu ? { maxHeight: position.height, top: position.top, left: position.left, width: position.width } : { maxHeight: position.height }}>
+    {options.map((option, index) => <div key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={option.value === value}
+      className={'select-field-option' + (index === activeIndex ? ' is-active' : '')}
+      onMouseMove={() => setActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => choose(index)}>
+      <span><strong>{option.label}</strong>{option.description ? <small>{option.description}</small> : null}</span>
+      {option.value === value ? <IconCheck size={17} aria-hidden="true" /> : null}
+    </div>)}
+  </div> : null;
+
+  return <div className={'select-field ' + className} ref={root} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget) && !list.current?.contains(event.relatedTarget)) setOpen(false); }}>
     <label id={`${id}-label`} htmlFor={`${id}-trigger`}>{label}</label>
     <div className="select-field-control">
       <button ref={trigger} id={`${id}-trigger`} type="button" className="select-field-trigger" role="combobox" disabled={unavailable}
@@ -92,14 +121,7 @@ export function SelectField({ label, value, options, onChange, disabled = false,
         onClick={() => expanded ? setOpen(false) : show()} onKeyDown={navigate}>
         <span title={selected?.label}>{selected?.label || '选择模型'}</span><IconChevronDown size={17} aria-hidden="true" />
       </button>
-      {expanded ? <div ref={list} id={`${id}-options`} role="listbox" aria-labelledby={`${id}-label`} className={'select-field-options opens-' + position.side} style={{ maxHeight: position.height }}>
-        {options.map((option, index) => <div key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={option.value === value}
-          className={'select-field-option' + (index === activeIndex ? ' is-active' : '')}
-          onMouseMove={() => setActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => choose(index)}>
-          <span><strong>{option.label}</strong>{option.description ? <small>{option.description}</small> : null}</span>
-          {option.value === value ? <IconCheck size={17} aria-hidden="true" /> : null}
-        </div>)}
-      </div> : null}
+      {viewportMenu && optionList ? createPortal(optionList, document.body) : optionList}
     </div>
   </div>;
 }
