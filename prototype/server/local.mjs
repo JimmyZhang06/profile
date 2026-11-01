@@ -21,6 +21,7 @@ export async function createLocalApp(config) {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".ico": "image/x-icon",
+    ".webmanifest": "application/manifest+json; charset=utf-8",
     ".woff2": "font/woff2",
   };
   const server = createServer(async (req, res) => {

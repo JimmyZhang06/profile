@@ -157,7 +157,7 @@ export async function createCloudApp(config) {
       if (!path.startsWith("/api/")) {
         if (!config.production)
           return json(res, 404, { error: "请访问前端开发地址" });
-        const root = resolve("dist/client"),
+        const root = resolve(config.staticRoot || "dist/client"),
           requested = resolve(root, "." + decodeURIComponent(path));
         assert(
           requested === root || requested.startsWith(root + sep),
@@ -166,8 +166,12 @@ export async function createCloudApp(config) {
         );
         let file = requested;
         try {
-          if (!(await stat(file)).isFile()) file = resolve(root, "index.html");
+          if (!(await stat(file)).isFile()) file = null;
         } catch {
+          file = null;
+        }
+        if (!file) {
+          assert(!extname(requested), 404, "文件不存在");
           file = resolve(root, "index.html");
         }
         const types = {
@@ -177,11 +181,12 @@ export async function createCloudApp(config) {
           ".svg": "image/svg+xml",
           ".png": "image/png",
           ".ico": "image/x-icon",
+          ".webmanifest": "application/manifest+json; charset=utf-8",
         };
         res.writeHead(200, {
           "Content-Type": types[extname(file)] || "application/octet-stream",
           "Cache-Control":
-            extname(file) === ".html" ? "no-cache" : "public,max-age=3600",
+            [".html", ".webmanifest"].includes(extname(file)) || path === "/apple-touch-icon.png" ? "no-cache" : "public,max-age=3600",
         });
         return res.end(await readFile(file));
       }
