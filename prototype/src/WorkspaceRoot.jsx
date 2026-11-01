@@ -3,6 +3,7 @@ import { App } from "./App.jsx";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { useCloudWorkspace } from "./hooks/useCloudWorkspace.js";
 import { cloudRequest } from "./lib/cloudClient.js";
+import { safeAvatar } from "./lib/avatar.js";
 import { Button } from "./components/ui/index.jsx";
 
 const AdminApp = lazy(() => import("./components/account/AdminApp.jsx"));
@@ -23,7 +24,7 @@ export function WorkspaceRoot() {
         return saved &&
           typeof saved.id === "string" &&
           typeof saved.email === "string"
-          ? saved
+          ? { id: saved.id, email: saved.email, avatar: safeAvatar(saved.avatar) }
           : null;
       } catch {
         return null;
@@ -36,7 +37,10 @@ export function WorkspaceRoot() {
     const sequence = ++refreshSequence.current;
     try {
       const data = await cloudRequest("cloud/me");
-      if (sequence === refreshSequence.current) setUser(data.user);
+      if (sequence === refreshSequence.current) {
+        setUser(data.user);
+        if (data.user) rememberAvatar(data.user.id, data.user.avatar);
+      }
       return data.user;
     } catch {
       if (sequence === refreshSequence.current) setUser(null);
@@ -46,7 +50,7 @@ export function WorkspaceRoot() {
     }
   }
   function choose(next) {
-    const value = next ? { id: next.id, email: next.email } : null;
+    const value = next ? { id: next.id, email: next.email, avatar: safeAvatar(next.avatar) } : null;
     setOwner(value);
     if (value) localStorage.setItem(ACCOUNT_KEY, JSON.stringify(value));
     else localStorage.removeItem(ACCOUNT_KEY);
@@ -56,6 +60,23 @@ export function WorkspaceRoot() {
     refreshSequence.current++;
     setUser(null);
     choose(null);
+  }
+  function rememberAvatar(id, image) {
+    const avatar = safeAvatar(image);
+    setOwner(current => {
+      if (!current || current.id !== id || current.avatar === avatar) return current;
+      const next = { ...current, avatar };
+      try { localStorage.setItem(ACCOUNT_KEY, JSON.stringify(next)); } catch { /* The cloud copy remains available if browser storage is full. */ }
+      return next;
+    });
+  }
+  async function updateAvatar(image) {
+    if (!user?.id) throw new Error('请重新登录后修改头像。');
+    const id = user.id;
+    const result = await cloudRequest('cloud/account/avatar', { method: 'PUT', ownerId: id, body: { image } });
+    refreshSequence.current++;
+    setUser(current => current?.id === id ? { ...current, avatar: result.avatar } : current);
+    rememberAvatar(id, result.avatar);
   }
   useEffect(() => {
     refresh();
@@ -69,7 +90,7 @@ export function WorkspaceRoot() {
       window.removeEventListener("focus", refresh);
     };
   }, []);
-  const account = { owner, user, loading, health, refresh, choose, logout };
+  const account = { owner, user, loading, health, refresh, choose, logout, updateAvatar };
   if (window.location.pathname.startsWith("/admin"))
     return (
       <Suspense

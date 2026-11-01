@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   IconCloud,
   IconDeviceDesktop,
@@ -8,7 +8,9 @@ import {
   IconDownload,
   IconRefresh,
 } from "@tabler/icons-react";
-import { Button, Field, Page } from "../ui/index.jsx";
+import { Button, Field } from "../ui/index.jsx";
+import { AccountPanel } from './AccountPanel.jsx';
+import { AvatarEditor } from './AvatarEditor.jsx';
 import { BrandLogo } from "../BrandLogo.jsx";
 import { cloudRequest } from "../../lib/cloudClient.js";
 import {
@@ -377,7 +379,9 @@ function Migration({ user, local, onEnter }) {
     </div>
   );
 }
-export function AccountPage({ account, workspace, onBack }) {
+export function AccountPage({ account, workspace, onBack, registerClose, onWorkspaceChange }) {
+  const [avatarDirty, setAvatarDirty] = useState(false), [avatarBusy, setAvatarBusy] = useState(false), [leavePrompt, setLeavePrompt] = useState(false);
+  const pendingClose = useRef(null), continueEditing = useRef(null);
   const [migrating, setMigrating] = useState(false),
     [sessions, setSessions] = useState(null),
     [quota, setQuota] = useState(null),
@@ -392,6 +396,15 @@ export function AccountPage({ account, workspace, onBack }) {
     own = !!user && user.id === account.owner?.id;
   const displayName = (own && workspace.state.profile?.name?.trim()) ||
     (user?.name?.trim() && user.name !== user.email ? user.name.trim() : '个人账号');
+  function requestClose(next = onBack) {
+    if (avatarBusy) return;
+    if (avatarDirty) { pendingClose.current = next; setLeavePrompt(true); }
+    else next();
+  }
+  useEffect(() => registerClose(requestClose), [avatarBusy, avatarDirty, onBack, registerClose]);
+  useEffect(() => { if (!avatarDirty) { setLeavePrompt(false); pendingClose.current = null; } }, [avatarDirty]);
+  useEffect(() => { if (leavePrompt) continueEditing.current?.focus({ preventScroll: true }); }, [leavePrompt]);
+  function changeWorkspace(fn) { requestClose(() => onWorkspaceChange(fn)); }
   async function load() {
     if (!own) return;
     try {
@@ -441,21 +454,11 @@ export function AccountPage({ account, workspace, onBack }) {
         }
     }
   return (
-    <Page
-      key={!user ? "login" : migrating || !own ? "migration" : "account"}
+    <AccountPanel
       title={user ? "账号与安全" : "登录账号"}
-      description={
-        user && !migrating ? "管理个人工作区、登录设备和资料。" : undefined
-      }
-      className={
-        "account-page " +
-        (!user
-          ? "account-login-page"
-          : migrating || !own
-            ? "account-migration-page"
-            : "")
-      }
-      onBack={onBack}
+      onClose={() => requestClose()}
+      closeDisabled={avatarBusy}
+      notice={leavePrompt ? <div className="account-panel-leave" role="alert"><p>头像调整还没有保存。</p><div><Button ref={continueEditing} variant="secondary" onClick={() => { pendingClose.current = null; setLeavePrompt(false); requestAnimationFrame(() => document.querySelector('.avatar-crop')?.focus()); }}>继续调整</Button><Button variant="ghost" onClick={() => { const next = pendingClose.current; pendingClose.current = null; setLeavePrompt(false); next?.(); }}>放弃调整并离开</Button></div></div> : null}
     >
       {!user ? (
         <EmailLogin
@@ -467,12 +470,11 @@ export function AccountPage({ account, workspace, onBack }) {
         <Migration
           user={user}
           local={local}
-          onEnter={() => account.choose(user)}
+          onEnter={() => changeWorkspace(() => account.choose(user))}
         />
       ) : (
         <>
           <div className="account-profile">
-            <div className="account-avatar" aria-hidden="true">{displayName === '个人账号' ? user.email[0].toUpperCase() : Array.from(displayName)[0]}</div>
             <div className="account-profile-copy">
               <h2>{displayName}</h2>
               <p>
@@ -485,12 +487,13 @@ export function AccountPage({ account, workspace, onBack }) {
               className="account-logout"
               variant="secondary"
               disabled={busy}
-              onClick={() => action(account.logout)}
+              onClick={() => changeWorkspace(account.logout)}
             >
               <IconLogout size={16} />
               退出登录
             </Button>
           </div>
+          <AvatarEditor account={account} name={displayName} onDirtyChange={setAvatarDirty} onBusyChange={setAvatarBusy} />
           <section className="account-section">
             <h2>工作区与同步</h2>
             <div className="account-detail-row">
@@ -522,10 +525,10 @@ export function AccountPage({ account, workspace, onBack }) {
               </div>
             </div>
             <div className="account-actions">
-              <Button variant="secondary" onClick={() => setMigrating(true)}>
+              <Button variant="secondary" onClick={() => requestClose(() => setMigrating(true))}>
                 从本机导入资料
               </Button>
-              <Button variant="ghost" onClick={() => account.choose(null)}>
+              <Button variant="ghost" onClick={() => changeWorkspace(() => account.choose(null))}>
                 <IconDeviceDesktop size={16} />
                 切换到本机工作区
               </Button>
@@ -714,14 +717,13 @@ export function AccountPage({ account, workspace, onBack }) {
                             );
                             setDeleteSent(true);
                           } else {
-                            await cloudRequest("cloud/account/delete", {
-                              method: "POST",
-                              ownerId: user.id,
-                              body: { email: deleteEmail, otp: deleteOtp },
+                            changeWorkspace(async () => {
+                              await cloudRequest("cloud/account/delete", {
+                                method: "POST", ownerId: user.id,
+                                body: { email: deleteEmail, otp: deleteOtp },
+                              });
+                              workspace.forget?.(); account.choose(null); await account.refresh();
                             });
-                            workspace.forget?.();
-                            account.choose(null);
-                            await account.refresh();
                           }
                         })
                       }
@@ -740,6 +742,6 @@ export function AccountPage({ account, workspace, onBack }) {
           {error}
         </p>
       ) : null}
-    </Page>
+    </AccountPanel>
   );
 }

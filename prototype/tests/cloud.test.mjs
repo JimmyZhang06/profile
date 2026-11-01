@@ -16,6 +16,7 @@ import { initialWorkspace, validWorkspace } from "../src/lib/workspace.js";
 import { selectImport } from "../src/lib/cloudWorkspace.js";
 import { getResumeDesign, releaseDesign } from "../src/lib/resumeDesign.js";
 import { activeDocument, moveDocumentToTrash, restoreDocument } from '../src/lib/documents.js';
+import { avatarFixture } from './fixtures/avatar.mjs';
 
 test("account, workspace and administration enforce real session and ownership boundaries", async (t) => {
   const mailbox = new Map();
@@ -157,6 +158,31 @@ test("account, workspace and administration enforce real session and ownership b
         (await alice.request("admin/setup", "POST", {})).status,
         403,
       );
+    },
+  );
+  await t.test(
+    "avatars persist across sessions, stay account-scoped and reject invalid uploads",
+    async () => {
+      const image = avatarFixture({ metadata: true }), clean = avatarFixture();
+      assert.equal((await client().request("cloud/account/avatar", "PUT", { image })).status, 401);
+      assert.equal((await alice.request("cloud/account/avatar", "PUT", { image }, { "X-Luli-Account": bobUser.id })).status, 409);
+      assert.equal((await alice.request("cloud/account/avatar", "PUT", { image }, { Origin: "https://untrusted.example" })).status, 403);
+      const saved = await alice.request("cloud/account/avatar", "PUT", { image, userId: bobUser.id });
+      assert.equal(saved.status, 200, JSON.stringify(saved.data));
+      assert.equal(saved.data.avatar, clean);
+      assert.equal((await alice.request("cloud/me")).data.user.avatar, clean);
+      assert.equal((await bob.request("cloud/me")).data.user.avatar, null);
+      const secondDevice = client();
+      assert.equal((await secondDevice.login("alice@example.test")).avatar, clean);
+      for (const invalid of ["https://example.test/avatar.png", "data:image/png;base64,AAAA"]) {
+        assert.equal((await alice.request("cloud/account/avatar", "PUT", { image: invalid })).status, 400);
+      }
+      assert.equal((await alice.request("cloud/account/avatar", "PUT", { image: "A".repeat(250000) })).status, 413);
+      assert.equal((await alice.request("auth/update-user", "POST", { image: "https://example.test/avatar.png" })).status, 404);
+      assert.equal((await secondDevice.request("cloud/me")).data.user.avatar, clean);
+      assert.equal((await alice.request("cloud/account/avatar", "PUT", { image: null })).data.avatar, null);
+      assert.equal((await secondDevice.request("cloud/me")).data.user.avatar, null);
+      await secondDevice.request("auth/sign-out", "POST", {});
     },
   );
   await t.test(

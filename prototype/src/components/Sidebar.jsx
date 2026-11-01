@@ -2,8 +2,9 @@ import { useRef, useState } from 'react';
 import { IconLayoutSidebar, IconEdit, IconSearch, IconBooks, IconSettings, IconFileText, IconUserCircle, IconDeviceDesktop, IconCloud, IconTrash, IconDots, IconPencil, IconX } from '@tabler/icons-react';
 import { IconButton, Menu } from './ui/index.jsx';
 import { BrandLogo } from './BrandLogo.jsx';
+import { Avatar } from './account/Avatar.jsx';
 
-export function Sidebar({ state, saveState, account, page, isMobile, sidebarOpen = state.ui.sidebar, onHome, onToggle, onNew, onOpen, onSelect }) {
+export function Sidebar({ state, saveState, account, page, accountOpen, isMobile, sidebarOpen = state.ui.sidebar, onHome, onToggle, onNew, onOpen, onSelect }) {
   const [search, setSearch] = useState('');
   const searchInput = useRef(null);
   const expanded = sidebarOpen;
@@ -34,7 +35,7 @@ export function Sidebar({ state, saveState, account, page, isMobile, sidebarOpen
     {expanded ? <section className="sidebar-documents" aria-label="简历列表">
       <div className="sidebar-search">
         <IconSearch size={16} aria-hidden="true" />
-        <input ref={searchInput} aria-label="搜索简历" placeholder="搜索简历" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') clearSearch(); }} />
+        <input ref={searchInput} aria-label="搜索简历" placeholder="搜索简历" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && search) { event.preventDefault(); event.stopPropagation(); clearSearch(); } }} />
         {search ? <IconButton label="清除搜索" onClick={clearSearch}><IconX size={14} /></IconButton> : null}
       </div>
       <div className="sidebar-section-label"><h2>{query ? '搜索结果' : '我的简历'}</h2><span aria-label={`${docs.length} 份简历`}>{docs.length}</span></div>
@@ -59,8 +60,8 @@ export function Sidebar({ state, saveState, account, page, isMobile, sidebarOpen
     <div className="sidebar-footer">
       {expanded ? <button type="button" className="sidebar-trash" aria-current={page === 'trash' ? 'page' : undefined} onClick={() => onOpen('trash')}><IconTrash size={17} stroke={1.65} /><span>回收站</span>{trashCount ? <small>{trashCount}</small> : null}</button> : trashCount ? <IconButton label="回收站" className={page === 'trash' ? 'active' : ''} onClick={() => onOpen('trash')}><IconTrash size={20} stroke={1.65} /></IconButton> : null}
       <div className="sidebar-bottom">
-        <button type="button" className={'nav-row sidebar-account ' + (page === 'account' ? 'active' : '')} aria-current={page === 'account' ? 'page' : undefined} aria-label={accountLabel} title={identity ? `${accountName}\n${identity.email}\n${storageLabel}` : '登录账号，在不同设备继续编辑'} data-tooltip={!expanded ? (identity ? '账号与安全' : '登录账号') : undefined} onClick={() => onOpen('account')}>
-          <span className="sidebar-avatar" aria-hidden="true">{identity ? Array.from(accountName)[0] : <IconUserCircle size={21} stroke={1.65} />}</span>
+        <button type="button" className={'nav-row sidebar-account ' + (accountOpen ? 'active' : '')} aria-expanded={!!accountOpen} aria-controls={accountOpen ? 'account-panel' : undefined} aria-label={accountLabel} title={identity ? `${accountName}\n${identity.email}\n${storageLabel}` : '登录账号，在不同设备继续编辑'} data-tooltip={!expanded ? (identity ? '账号与安全' : '登录账号') : undefined} onClick={() => onOpen('account')}>
+          {identity ? <Avatar className="sidebar-avatar" image={sessionUser ? sessionUser.avatar : account?.owner?.avatar} name={accountName} /> : <span className="sidebar-avatar" aria-hidden="true"><IconUserCircle size={21} stroke={1.65} /></span>}
           {expanded ? <span className="sidebar-account-copy"><span className="sidebar-account-name">{identity ? accountName : '登录账号'}</span><span className="sidebar-storage" title={storageLabel}>{cloud ? <IconCloud size={12} /> : <IconDeviceDesktop size={12} />}<span>{storageLabel}</span></span></span> : null}
         </button>
         <IconButton label="设置" className={'sidebar-settings' + (page === 'settings' ? ' active' : '')} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => onOpen('settings')}><IconSettings size={19} stroke={1.65} /></IconButton>

@@ -1,0 +1,79 @@
+.work-area { position: relative; }
+.workspace-content { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.avatar-image { display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: var(--surface-selected); color: var(--text-primary); font-weight: 500; }
+.avatar-image > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.account-panel { position: absolute; inset: 0 0 0 auto; z-index: 15; display: flex; flex-direction: column; width: clamp(380px, 48%, 540px); max-width: 100%; min-height: 0; background: var(--bg); border-left: 1px solid var(--border); box-shadow: -12px 0 36px var(--shadow-color); animation: account-panel-enter 180ms ease-out; }
+.account-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex: 0 0 56px; padding: 0 20px 0 24px; border-bottom: 1px solid var(--border-subtle); }
+.account-panel-header h1 { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 600; outline: none; }
+.account-panel-header > .icon-button { width: 36px; height: 36px; }
+.account-panel-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.account-panel-scroll::-webkit-scrollbar { display: none; }
+.account-panel-content { padding: 28px 28px 40px; overflow-wrap: anywhere; }
+.account-panel .account-profile { grid-template-columns: minmax(0, 1fr) auto; gap: 20px 12px; padding-bottom: 24px; }
+.account-panel .account-profile-copy { grid-column: 1; }
+.account-panel .account-profile-copy h2 { font-size: 22px; line-height: 1.5; margin-bottom: 6px; }
+.account-panel .account-profile-copy > p { font-size: 13px; line-height: 1.7; flex-wrap: wrap; }
+.account-panel .account-profile > .account-logout { grid-column: 2; grid-row: 1; padding: 7px 10px; min-height: 36px; font-size: 12px; }
+.account-panel .account-profile > .account-login-email { grid-column: 1 / -1; background: none; padding: 0; border: 0; border-radius: 0; }
+.account-panel .account-login-email > p { font-size: 14px; }
+.account-panel .account-section { padding: 24px 0; }
+.account-panel .account-section h2 { font-size: 15px; margin-bottom: 16px; }
+.account-panel .account-section > p { font-size: 13px; line-height: 1.8; }
+.account-panel .account-detail-row { gap: 12px; flex-wrap: wrap; padding: 10px 0; }
+.account-panel .account-detail-row p { font-size: 13px; }
+.account-panel .account-actions { gap: 8px; }
+.account-panel .account-actions .button { font-size: 13px; padding-inline: 12px; }
+.account-panel .email-login { margin: 22px auto; }
+.account-panel .email-login h1 { font-size: 25px; }
+.account-panel .migration-items { grid-template-columns: minmax(0, 1fr); }
+.account-panel-leave { padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--surface-muted); flex-shrink: 0; }
+.account-panel-leave p { margin: 0 0 8px; font-size: 13px; }
+.account-panel-leave > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.avatar-editor { padding: 22px 0 24px; border-top: 1px solid var(--border-subtle); }
+.avatar-editor-summary { display: flex; align-items: center; gap: 18px; }
+.avatar-editor-summary > div { min-width: 0; }
+.avatar-editor-summary strong { font-size: 14px; font-weight: 600; }
+.avatar-editor-summary p { font-size: 12px; line-height: 1.7; color: var(--text-secondary); margin: 5px 0; }
+.avatar-upload { position: relative; flex-shrink: 0; width: 72px; height: 72px; padding: 0; border-radius: 50%; }
+.avatar-upload > .avatar-image { width: 72px; height: 72px; font-size: 27px; }
+.avatar-camera { position: absolute; bottom: -1px; right: -2px; display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid var(--bg); border-radius: 50%; background: var(--action-bg); color: var(--action-fg); }
+.avatar-text-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.avatar-text-actions button { min-height: 32px; padding: 4px 0; font-size: 13px; color: var(--text-primary); text-decoration: underline; text-underline-offset: 4px; }
+.avatar-text-actions button:last-child:not(:first-child) { color: var(--text-secondary); }
+.avatar-crop-editor { margin-top: 22px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; }
+.avatar-crop-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 14px; margin-bottom: 20px; }
+.avatar-crop-heading > span { font-size: 12px; color: var(--text-secondary); }
+.avatar-crop { display: block; width: min(240px, 100%); aspect-ratio: 1; height: auto; margin: auto; border-radius: 50%; background: var(--surface-muted); outline: 1px solid var(--border); outline-offset: 4px; cursor: grab; touch-action: none; }
+.avatar-crop:active { cursor: grabbing; }
+.avatar-crop:focus-visible { outline: 2px solid var(--focus-ring); }
+.avatar-crop-hint { font-size: 12px; line-height: 1.7; text-align: center; color: var(--text-secondary); margin: 16px 0; }
+.avatar-zoom { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.avatar-zoom input { flex: 1; min-width: 0; accent-color: var(--text-primary); cursor: pointer; }
+.avatar-zoom output { font-size: 12px; font-variant-numeric: tabular-nums; width: 36px; text-align: right; color: var(--text-secondary); }
+.avatar-crop-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.avatar-crop-actions > button:first-child { display: flex; align-items: center; gap: 5px; margin-right: auto; padding: 6px 0; font-size: 12px; color: var(--text-secondary); }
+.avatar-crop-actions .button { font-size: 13px; padding-inline: 10px; }
+.avatar-status { font-size: 13px; line-height: 1.7; color: var(--text-secondary); margin: 12px 0 0; }
+@keyframes account-panel-enter { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .account-panel { animation: none; } }
+@media (max-width: 760px) {
+  .account-panel { width: 100%; border-left: 0; box-shadow: none; }
+  .account-panel-header { padding-inline: 16px 8px; }
+  .account-panel-header > .icon-button { width: 44px; height: 44px; }
+  .account-panel-content { padding: 24px 20px max(32px, env(safe-area-inset-bottom)); }
+  .account-panel .button, .avatar-text-actions button { min-height: 44px; }
+  .account-panel .account-profile-copy h2 { font-size: 21px; }
+  .account-panel .account-profile > .account-logout { min-height: 44px; font-size: 13px; }
+  .account-panel .account-login-email > p { font-size: 15px; }
+  .avatar-editor-summary { gap: 14px; }
+  .avatar-editor-summary p, .avatar-crop-hint { font-size: 13px; }
+  .avatar-crop-editor { padding: 16px 12px; }
+  .avatar-zoom { min-height: 44px; }
+  .avatar-crop-actions > button:first-child { min-height: 44px; }
+  .account-panel input:not([type=range]):not([type=checkbox]) { font-size: 16px; }
+}
+@media (max-width: 380px) {
+  .account-panel .account-profile { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .account-panel .account-profile > .account-logout { grid-column: 1; grid-row: 3; justify-self: start; }
+}
+@media print { .account-panel { display: none; } .workspace-content { display: block !important; } }

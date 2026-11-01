@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IconArrowLeft, IconCheck, IconEye, IconMenu2, IconX } from '@tabler/icons-react';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Chat } from './components/Chat.jsx';
@@ -38,6 +38,19 @@ export function App({ workspace, account }) {
   const [designOpen, setDesignOpen] = useState(false);
   const [mobileDesignPreview, setMobileDesignPreview] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountOrigin = useRef(null), accountCloseRequest = useRef(null);
+  const registerAccountClose = useCallback(handler => { accountCloseRequest.current = handler; return () => { accountCloseRequest.current = null; }; }, []);
+  const closeAccount = useCallback((restore = true) => {
+    setAccountOpen(false);
+    if (!restore) return;
+    const origin = accountOrigin.current;
+    if (isMobile && origin?.navigation) setMobileNavigationOpen(true);
+    requestAnimationFrame(() => {
+      const target = origin?.trigger?.getClientRects().length ? origin.trigger : document.querySelector('.mobile-navigation-button, .sidebar-account');
+      target?.focus({ preventScroll: true });
+    });
+  }, [isMobile]);
   const sidebarOpen = isMobile ? mobileNavigationOpen : state.ui.sidebar;
   const navigationTrigger = useRef(null), navigationWasOpen = useRef(false);
   const task = useRef(null), timer = useRef(null), workArea = useRef(null), latest = useRef(state);
@@ -57,12 +70,25 @@ export function App({ workspace, account }) {
       target?.focus({ preventScroll: true });
     }
     navigationWasOpen.current = mobileNavigationOpen;
-    const close = event => { if (event.key === 'Escape' && mobileNavigationOpen) { event.preventDefault(); setMobileNavigationOpen(false); } };
+    const close = event => { if (event.key === 'Escape' && !event.defaultPrevented && mobileNavigationOpen) { event.preventDefault(); setMobileNavigationOpen(false); } };
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
   }, [isMobile, mobileNavigationOpen]);
   useEffect(() => { if (pending) workArea.current?.querySelector('.page-leave-notice button')?.focus({ preventScroll: true }); }, [pending]);
+  function withAccountClosed(action) {
+    if (!accountOpen) return action();
+    const next = () => { closeAccount(false); action(); };
+    if (accountCloseRequest.current) accountCloseRequest.current(next); else next();
+  }
   function open(name) {
+    if (name === 'account') {
+      if (accountOpen) return accountCloseRequest.current?.();
+      accountOrigin.current = { trigger: document.activeElement, navigation: mobileNavigationOpen };
+      closeMobileNavigation(); setAccountOpen(true); return;
+    }
+    withAccountClosed(() => openPage(name));
+  }
+  function openPage(name) {
     closeMobileNavigation();
     if (!guard() || name === page) return;
     if (!currentDoc && ['job', 'versions', 'review', 'source', 'experience', 'export', 'rename', 'delete'].includes(name)) name = 'new';
@@ -81,10 +107,10 @@ export function App({ workspace, account }) {
   const previousPage = useRef(null);
   useEffect(() => {
     const titles = { account: '账号与安全', library: '资料库', projects: '资料库', job: '目标岗位', profile: '资料库', new: '新建简历', settings: '设置', versions: '版本记录', review: '修改记录', source: '原始依据', export: '导出简历', rename: '重命名简历', delete: '删除简历', trash: '回收站' };
-    document.title = page ? (page === 'experience' ? '完整经历预览' : titles[page]) + ' · 履历' : '履历 · 简历工作空间';
+    document.title = accountOpen ? '账号与安全 · 履历' : page ? (page === 'experience' ? '完整经历预览' : titles[page]) + ' · 履历' : '履历 · 简历工作空间';
     if (previousPage.current && !page) workArea.current?.querySelector(previousPage.current === 'experience' ? '.composer-reference' : '.document-title-menu button')?.focus({ preventScroll: true });
     previousPage.current = page;
-  }, [page]);
+  }, [page, accountOpen]);
   useEffect(() => {
     if (!workspace.cloud || !workspace.ready) return;
     let cancelled = false;
@@ -187,16 +213,18 @@ export function App({ workspace, account }) {
   }
   useEffect(() => {
     function key(event) {
-      if (!(event.ctrlKey || event.metaKey) || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable || page) return;
+      if (!(event.ctrlKey || event.metaKey) || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable || page || accountOpen) return;
       if (event.key.toLowerCase() === 'z') { event.preventDefault(); if (!edit && !conflict) updateDoc(latest.current.activeId, d => undoDocument(d, event.shiftKey)); }
       if (event.key.toLowerCase() === 's') { event.preventDefault(); if (!edit) open('versions'); }
       if (event.altKey && event.key.toLowerCase() === 'n') { event.preventDefault(); if (!edit) open('new'); }
     }
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
-  }, [edit, conflict, page]);
+  }, [edit, conflict, page, accountOpen]);
   return <PageNavigationContext.Provider value={{ registerDirty, request, stay, openNavigation, documentTitle: currentDoc?.title || '' }}><main className={'app-shell ' + (page ? 'has-page ' : '') + (sidebarOpen ? 'sidebar-open ' : '')}>
-    <Sidebar sidebarOpen={sidebarOpen} isMobile={isMobile} saveState={saveState} account={account} state={state} page={page} onHome={() => { closeMobileNavigation(); if (guard()) navigate(null); }} onToggle={() => isMobile ? setMobileNavigationOpen(value => !value) : setState(s => ({ ...s, ui: { ...s.ui, sidebar: !s.ui.sidebar } }))} onNew={() => open('new')} onOpen={open} onSelect={selectDocument} />
-    <div className={'work-area mobile-' + mobileView + (focus ? ' canvas-focused' : '')} ref={workArea}>
+    <Sidebar sidebarOpen={sidebarOpen} isMobile={isMobile} saveState={saveState} account={account} state={state} page={page} accountOpen={accountOpen} onHome={() => withAccountClosed(() => { closeMobileNavigation(); if (guard()) navigate(null); })} onToggle={() => isMobile ? setMobileNavigationOpen(value => !value) : setState(s => ({ ...s, ui: { ...s.ui, sidebar: !s.ui.sidebar } }))} onNew={() => open('new')} onOpen={open} onSelect={(id, destination) => withAccountClosed(() => selectDocument(id, destination))} />
+    {isMobile && mobileNavigationOpen ? <button type="button" className="mobile-navigation-dismiss" aria-label="收起简历列表" onClick={closeMobileNavigation} /> : null}
+    <div className={'work-area mobile-' + mobileView + (focus ? ' canvas-focused' : '')} ref={workArea} inert={isMobile && mobileNavigationOpen || undefined} aria-hidden={isMobile && mobileNavigationOpen || undefined}>
+      <div className="workspace-content" inert={accountOpen || undefined} aria-hidden={accountOpen || undefined}>
       {(error || conflict) ? <div className={'workspace-alert' + (workspace.remoteConflict ? ' sync-conflict' : '')} role="alert"><span>{workspace.remoteConflict ? '另一台设备修改了资料。双方内容已保留，请选择如何继续。' : conflict ? '另一窗口更新了这份工作空间。请重新载入后继续。' : error}</span>{workspace.remoteConflict ? <><div className="sync-conflict-versions"><div><strong>这台设备</strong><p>{state.documents.length} 份简历 · {state.library.length} 个项目</p><small>{state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div><div><strong>云端版本 {workspace.remoteConflict.revision}</strong><p>{workspace.remoteConflict.state.documents.length} 份简历 · {workspace.remoteConflict.state.library.length} 个项目</p><small>{workspace.remoteConflict.state.documents.slice(0,3).map(d=>d.title).join('、')}</small></div></div><Button onClick={()=>workspace.resolveConflict('both')}>两个版本都保留</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('local')}>继续使用本机版本</Button><Button variant="secondary" onClick={()=>workspace.resolveConflict('cloud')}>使用云端版本</Button></> : null}<Button variant="secondary" onClick={() => downloadFile('履历恢复备份.json', JSON.stringify(state), 'application/json')}>导出当前内容</Button>{conflict && !workspace.cloud ? <Button onClick={() => window.location.reload()}>重新载入</Button> : null}{workspace.cloud && !conflict ? <Button onClick={()=>saveState==='expired'?open('account'):workspace.retry()}>{saveState==='expired'?'重新登录':'重试同步'}</Button> : null}</div> : null}
       {pending ? <div className="page-leave-notice" role="alert"><span>当前页面还有未保存的内容。</span><Button variant="secondary" onClick={stay}>继续编辑</Button><Button variant="ghost" onClick={discard}>放弃更改并离开</Button></div> : null}
       {!page && !currentDoc ? <><header className="mobile-empty-header"><IconButton label="打开简历列表" onClick={openNavigation}><IconMenu2 size={21} /></IconButton><span>我的工作空间</span></header><EmptyDocuments onNew={() => open('new')} onTrash={() => open('trash')} count={state.documents.filter(d => d.archived).length} /></> : null}
@@ -209,7 +237,6 @@ export function App({ workspace, account }) {
       {designOpen && !edit ? <footer className="mobile-design-actions"><Button variant="secondary" onClick={() => setMobileDesignPreview(value => !value)}>{mobileDesignPreview ? <IconArrowLeft size={17} /> : <IconEye size={17} />}{mobileDesignPreview ? '返回设置' : '预览效果'}</Button><Button onClick={closeDesign}><IconCheck size={17} />完成排版</Button></footer> : null}
       </div>
       <div className="workspace-page-host" hidden={!page} inert={conflict || undefined}>
-    {page === 'account' ? <AccountPage account={account} workspace={workspace} onBack={()=>navigate(null)}/> : null}
     {page === 'delete' && currentDoc ? <DeleteDocumentPage doc={doc} onBack={() => navigate(null)} onConfirm={trashCurrentDocument} /> : null}
     {page === 'trash' ? <DocumentTrashPage documents={state.documents} onBack={() => navigate(null)} onRestore={restoreDeletedDocument} /> : null}
     {['library', 'profile', 'projects'].includes(page) ? <LibraryPage hasActiveDocument={!!currentDoc} key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{hasActiveDocument: !!currentDoc, busy: !!busyId, settings: state.settings, onOpenJob: () => open('job'), onConfigure: () => open('settings'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}
@@ -223,6 +250,12 @@ export function App({ workspace, account }) {
     {page === 'export' ? <ExportPage doc={doc} onBack={() => navigate(null)} notify={notify} onPrint={() => { finish(null); setSelected(null); requestAnimationFrame(() => requestAnimationFrame(() => window.print())); }} /> : null}
     {page === 'rename' ? <RenamePage key={doc.id} doc={doc} onBack={() => navigate(null)} onSave={title => { changeDoc(d => ({ ...d, title })); finish(null); }} /> : null}
       </div>
+      </div>
+      {accountOpen ? <AccountPage key={account.user?.id || account.owner?.id || 'local'} account={account} workspace={workspace} onBack={closeAccount} registerClose={registerAccountClose} onWorkspaceChange={action => {
+        if (!guard()) { closeAccount(); return; }
+        closeAccount(false);
+        request(async () => { try { await action(); } catch (e) { notify(e.message || '账号操作失败，请重试。'); } });
+      }} /> : null}
     </div>
     {toast ? <div className="toast" role="status"><IconCheck size={16} /><span>{toast}</span><IconButton label="关闭提示" onClick={() => setToast('')}><IconX size={14} /></IconButton></div> : null}
   </main></PageNavigationContext.Provider>;

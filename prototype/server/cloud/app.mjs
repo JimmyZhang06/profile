@@ -21,6 +21,7 @@ import {
 } from "./workspace.mjs";
 import { listConnections, saveConnection, streamModel } from "./models.mjs";
 import { adminRoute, seedTemplates, publicTemplates } from "./admin.mjs";
+import { normalizeAvatar, storedAvatar } from "./avatar.mjs";
 
 export function json(res, status, data) {
   res.writeHead(status, {
@@ -30,12 +31,12 @@ export function json(res, status, data) {
   });
   res.end(JSON.stringify(data));
 }
-async function readBody(req) {
+async function readBody(req, maximum = 9_000_000) {
   let size = 0;
   const chunks = [];
   for await (const chunk of req) {
     size += chunk.length;
-    assert(size <= 9_000_000, 413, "请求内容过大");
+    assert(size <= maximum, 413, "请求内容过大");
     chunks.push(chunk);
   }
   try {
@@ -201,7 +202,7 @@ export async function createCloudApp(config) {
       });
       await limit(db, "api:" + actor.user.id, 300, 60);
       const body = ["POST", "PUT", "DELETE"].includes(req.method)
-        ? await readBody(req)
+        ? await readBody(req, path === "/api/cloud/account/avatar" ? 240000 : undefined)
         : {};
       let result;
       if (path === "/api/cloud/me" && req.method === "GET") {
@@ -215,6 +216,7 @@ export async function createCloudApp(config) {
             id: actor.user.id,
             email: actor.user.email,
             name: actor.user.name,
+            avatar: storedAvatar(actor.user.image),
             role: actor.access.role,
             twoFactorEnabled: !!actor.user.twoFactorEnabled,
           },
@@ -230,6 +232,11 @@ export async function createCloudApp(config) {
             ).count,
           },
         };
+      } else if (path === "/api/cloud/account/avatar" && req.method === "PUT") {
+        await limit(db, "avatar:" + actor.user.id, 20, 300);
+        const avatar = normalizeAvatar(body.image);
+        await query(db, 'UPDATE "user" SET image=$2,"updatedAt"=NOW() WHERE id=$1', [actor.user.id, avatar]);
+        result = { avatar };
       } else if (path === "/api/cloud/workspace" && req.method === "GET")
         result = await ensureWorkspace(db, actor.user.id);
       else if (path === "/api/cloud/workspace" && req.method === "PUT")
