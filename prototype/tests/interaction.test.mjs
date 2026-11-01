@@ -3,6 +3,29 @@ import assert from 'node:assert/strict';
 import { createTypewriter } from '../src/lib/typewriter.js';
 import { clampPanelRatio, panelBounds } from '../src/lib/panels.js';
 import { initialWorkspace, validWorkspace } from '../src/lib/workspace.js';
+import { intersectViewport } from '../src/lib/viewport.js';
+
+test('portal controls avoid the status bar, home indicator and landscape sensor areas', () => {
+  assert.deepEqual(intersectViewport(
+    { left: 0, top: 0, right: 390, bottom: 844 },
+    { left: 0, top: 59, right: 390, bottom: 810 },
+  ), { leftEdge: 8, topEdge: 67, rightEdge: 382, bottomEdge: 802 });
+  assert.deepEqual(intersectViewport(
+    { left: 0, top: 0, right: 844, bottom: 390 },
+    { left: 59, top: 0, right: 785, bottom: 369 }, 12,
+  ), { leftEdge: 71, topEdge: 12, rightEdge: 773, bottomEdge: 357 });
+});
+
+test('keyboard and zoomed viewport bounds intersect safe areas without double padding', () => {
+  assert.deepEqual(intersectViewport(
+    { left: 20, top: 120, right: 350, bottom: 480 },
+    { left: 0, top: 59, right: 390, bottom: 810 },
+  ), { leftEdge: 28, topEdge: 128, rightEdge: 342, bottomEdge: 472 });
+  assert.deepEqual(intersectViewport(
+    { left: 0, top: 0, right: 1440, bottom: 900 },
+    { left: 0, top: 0, right: 1440, bottom: 900 },
+  ), { leftEdge: 8, topEdge: 8, rightEdge: 1432, bottomEdge: 892 });
+});
 
 function harness(options = {}) {
   let time = 0, nextId = 0;

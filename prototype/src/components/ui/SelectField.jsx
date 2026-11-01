@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { getViewportBounds } from '../../lib/viewport.js';
 import { IconCheck, IconChevronDown } from '@tabler/icons-react';
 import './select-field.css';
 
@@ -20,10 +21,7 @@ export function SelectField({ label, value, options, onChange, disabled = false,
     const bounds = trigger.current.getBoundingClientRect();
     const scroll = trigger.current.closest(scrollContainers)?.getBoundingClientRect();
     if (viewportMenu) {
-      const viewport = window.visualViewport;
-      const leftEdge = (viewport?.offsetLeft || 0) + 12, topEdge = (viewport?.offsetTop || 0) + 12;
-      const rightEdge = leftEdge + (viewport?.width || window.innerWidth) - 24;
-      const bottomEdge = topEdge + (viewport?.height || window.innerHeight) - 24;
+      const { leftEdge, topEdge, rightEdge, bottomEdge } = getViewportBounds(12);
       if (!bounds.width || bounds.bottom <= Math.max(topEdge, scroll?.top ?? 0) || bounds.top >= Math.min(bottomEdge, scroll?.bottom ?? Infinity)) { setOpen(false); return; }
       const above = Math.max(0, bounds.top - topEdge - 7), below = Math.max(0, bottomEdge - bounds.bottom - 7);
       const desired = Math.min(280, list.current?.scrollHeight || options.length * 48 + 12);

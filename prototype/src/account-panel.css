@@ -60,7 +60,7 @@
   .account-panel { width: 100%; border-left: 0; box-shadow: none; }
   .account-panel-header { padding-inline: 16px 8px; }
   .account-panel-header > .icon-button { width: 44px; height: 44px; }
-  .account-panel-content { padding: 24px 20px max(32px, env(safe-area-inset-bottom)); }
+  .account-panel-content { padding: 24px 20px 32px; }
   .account-panel .button, .avatar-text-actions button { min-height: 44px; }
   .account-panel .account-profile-copy h2 { font-size: 21px; }
   .account-panel .account-profile > .account-logout { min-height: 44px; font-size: 13px; }

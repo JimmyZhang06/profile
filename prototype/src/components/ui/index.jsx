@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { getViewportBounds } from "../../lib/viewport.js";
 import {
   IconArrowLeft,
   IconCheck,
@@ -130,15 +131,8 @@ export function Menu({ label, icon, value, items, className = "", children }) {
       const anchor = trigger.current?.getBoundingClientRect(),
         menu = popover.current;
       if (!anchor || !menu) return;
-      const viewport = window.visualViewport;
-      const edge = 8,
-        gap = 6,
-        leftEdge = (viewport?.offsetLeft || 0) + edge,
-        topEdge = (viewport?.offsetTop || 0) + edge;
-      const rightEdge =
-        leftEdge + (viewport?.width || window.innerWidth) - edge * 2;
-      const bottomEdge =
-        topEdge + (viewport?.height || window.innerHeight) - edge * 2;
+      const gap = 6;
+      const { leftEdge, topEdge, rightEdge, bottomEdge } = getViewportBounds();
       if (!anchor.width || anchor.bottom < topEdge || anchor.top > bottomEdge) {
         setOpen(false);
         return;

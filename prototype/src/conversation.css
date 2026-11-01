@@ -127,7 +127,7 @@
   .user-bubble { max-width: 94%; padding: 10px 13px; }
   .conversation-content { padding-top: 16px; }
   .chat-welcome h1 { font-size: 23px; }
-  .composer-dock { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .composer-dock { padding-bottom: 8px; }
 }
 @container conversation (min-width: 580px) {
   .composer-caption > span { display: inline; }
