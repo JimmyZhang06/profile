@@ -5,8 +5,10 @@ unprivileged `luli` systemd service and release directories under `/opt/luli`.
 Only Apache listens publicly. Node binds to `127.0.0.1:4180`.
 
 The latest product release is recorded in
-[ADMIN-RECORDS-2026-11-02.md](ADMIN-RECORDS-2026-11-02.md), including compact
-mobile record lists, validation and rollback.
+[ADMIN-AUDIT-TABS-2026-11-02.md](ADMIN-AUDIT-TABS-2026-11-02.md), including
+collapsed audit records, centered model tabs and iOS AutoFill limitations.
+Compact mobile records are recorded in
+[ADMIN-RECORDS-2026-11-02.md](ADMIN-RECORDS-2026-11-02.md).
 Phone admin navigation is recorded in
 [ADMIN-MOBILE-2026-11-02.md](ADMIN-MOBILE-2026-11-02.md).
 Installed web app safe areas are recorded in
