@@ -1,0 +1,43 @@
+@media screen {
+  .revision-deck { min-width: 0; max-width: 100%; margin-top: 20px; }
+  .revision-deck-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .revision-deck-label { display: flex; flex-direction: column; gap: 2px; color: var(--text-primary); font-size: 13px; font-weight: 500; line-height: 1.5; }
+  .revision-deck-hint { color: var(--text-muted); font-size: 12px; font-weight: 400; }
+  .revision-deck-navigation { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .revision-deck-navigation .icon-button { width: 36px; height: 40px; border-radius: 9px; color: var(--text-secondary); }
+  .revision-deck-navigation .icon-button[aria-disabled="true"] { color: var(--text-disabled); background: none; cursor: default; }
+  .revision-deck-position { display: flex; align-items: baseline; justify-content: center; gap: 6px; min-width: 52px; color: var(--text-muted); font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .revision-deck-position strong { color: var(--text-primary); font-size: 14px; font-weight: 550; }
+  .revision-deck-stack { position: relative; isolation: isolate; padding-bottom: 9px; }
+  .revision-deck-stack::before, .revision-deck-stack.has-depth::after { content: ''; position: absolute; z-index: -1; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-subtle); pointer-events: none; }
+  .revision-deck-stack::before { inset: 9px 8px 0; }
+  .revision-deck-stack.has-depth { padding-bottom: 17px; }
+  .revision-deck-stack.has-depth::before { bottom: 8px; }
+  .revision-deck-stack.has-depth::after { inset: 18px 16px 0; z-index: -2; background: var(--surface-muted); }
+  .revision-deck-viewport { position: relative; display: flex; align-items: flex-start; gap: 16px; width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none; border-radius: 14px; overflow-anchor: none; }
+  .revision-deck-viewport::-webkit-scrollbar { display: none; }
+  .revision-deck-viewport:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+  .revision-deck-slide { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
+  .revision-deck-slide[aria-hidden="true"] { max-height: 100%; overflow: hidden; }
+  .revision-deck .revision-card { margin: 0; border-radius: 14px; background: var(--surface-card); box-shadow: none; }
+  .revision-deck .revision-heading { align-items: flex-start; padding: 13px 14px; background: none; }
+  .revision-deck .revision-heading > button { align-items: flex-start; text-align: left; line-height: 1.6; }
+  .revision-deck .revision-heading > button > svg { margin-top: 3px; }
+  .revision-deck .revision-status { padding-top: 2px; }
+  .revision-deck .revision-new { padding: 2px 16px 12px; font-size: var(--reading-text); white-space: pre-wrap; }
+  .revision-deck .revision-compare { min-height: 40px; margin: 0 12px 6px; font-size: 13px; }
+  .revision-deck .revision-old { white-space: pre-wrap; }
+  .revision-deck .revision-footer { flex-wrap: wrap; align-items: center; padding: 8px 12px; }
+  .revision-deck .revision-footer > .text-button { min-height: 36px; font-size: 13px; }
+  .revision-deck .revision-footer > div { margin-left: auto; }
+  .revision-deck .revision-footer .button { min-height: 36px; font-size: 13px; }
+}
+
+@media screen and (pointer: coarse), screen and (max-width: 760px) {
+  .revision-deck-navigation .icon-button { width: 44px; height: 44px; }
+  .revision-deck .revision-compare, .revision-deck .revision-footer > .text-button, .revision-deck .revision-footer .button { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revision-deck-viewport { scroll-behavior: auto; }
+}

@@ -18,6 +18,7 @@ import "./mobile-workspace.css";
 import "./experience-reading.css";
 import "./account-panel.css";
 import "./viewport.css";
+import "./revision-deck.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

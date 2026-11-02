@@ -6,6 +6,10 @@ export function useConversationScroll(documentId, active) {
   const [atBottom, setAtBottom] = useState(true);
   activeRef.current = active;
 
+  // Reviewing a card is deliberate reading. Its expanding comparison or a
+  // taller next card must not pull the conversation down to its newest edge.
+  function pauseFollowing() { following.current = false; }
+
   function scrollToLatest(animate = false) {
     following.current = true;
     setAtBottom(true);
@@ -44,5 +48,5 @@ export function useConversationScroll(documentId, active) {
     if (active && following.current) scrollToLatest();
   }, [active]);
 
-  return { viewportRef, contentRef, atBottom, onScroll, scrollToLatest };
+  return { viewportRef, contentRef, atBottom, onScroll, scrollToLatest, pauseFollowing };
 }
