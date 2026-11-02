@@ -5,8 +5,10 @@ unprivileged `luli` systemd service and release directories under `/opt/luli`.
 Only Apache listens publicly. Node binds to `127.0.0.1:4180`.
 
 The latest product release is recorded in
-[IOS-SAFE-AREA-2026-11-02.md](IOS-SAFE-AREA-2026-11-02.md), including installed
-web app safe areas, validation limits and rollback.
+[ADMIN-MOBILE-2026-11-02.md](ADMIN-MOBILE-2026-11-02.md), including phone admin
+navigation, compact record lists, validation limits and rollback.
+Installed web app safe areas are recorded in
+[IOS-SAFE-AREA-2026-11-02.md](IOS-SAFE-AREA-2026-11-02.md).
 Home Screen icons and web app metadata are recorded in
 [WEBAPP-ICONS-2026-11-01.md](WEBAPP-ICONS-2026-11-01.md).
 Personal avatars and contextual drawers are recorded in
