@@ -5,6 +5,9 @@ unprivileged `luli` systemd service and release directories under `/opt/luli`.
 Only Apache listens publicly. Node binds to `127.0.0.1:4180`.
 
 The latest product release is recorded in
+[REVISION-DECK-2026-11-02.md](REVISION-DECK-2026-11-02.md), including
+swipeable stacked suggestions and preserved review actions.
+Earlier admin refinements are recorded in
 [ADMIN-AUDIT-TABS-2026-11-02.md](ADMIN-AUDIT-TABS-2026-11-02.md), including
 collapsed audit records, centered model tabs and iOS AutoFill limitations.
 Compact mobile records are recorded in
