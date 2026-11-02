@@ -88,6 +88,11 @@ test('local proxy forwards streaming responses and protects connection credentia
   const response = await post('/api/chat', { connectionId: config.id, context: {}, prompt: '检查', history: [] });
   assert.match(await response.text(), /已检查/);
   assert.equal(received.stream, true);
+  assert.equal(received.max_tokens, 8192);
+  const delivery = await post('/api/chat', { connectionId: config.id, purpose: 'delivery', context: {}, prompt: '整份投递稿', history: [{role: 'user', content: 'OLD_PRIVATE_HISTORY'}] });
+  await delivery.text();
+  assert.match(received.messages[0].content, /<resume>/);
+  assert.doesNotMatch(JSON.stringify(received.messages), /OLD_PRIVATE_HISTORY/);
   const listed = await fetch(url + '/api/connections', { headers }).then(r => r.text());
   assert.doesNotMatch(listed, /TEST_ONLY/);
   assert.equal((await post('/api/chat', { connectionId: config.id }, { headers: { ...headers, Origin: 'https://unrelated.example' } })).status, 403);

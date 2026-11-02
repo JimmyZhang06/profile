@@ -6,6 +6,7 @@ export function WorkspaceHeader({ doc, saveState, edit, mobileView, onMobileView
   const pending = doc.messages.flatMap(message => (message.proposals || []).filter(proposal => !message.dismissed?.includes(proposal.id) && proposalState(doc, proposal) === 'pending')).length;
   const saveLabel = ({ saving: '正在保存', error: '保存未完成', loading: '正在读取云端资料', syncing: '正在同步', synced: '已同步', offline: '同步失败 · 本机已保存', expired: '登录过期 · 草稿已保留', conflict: '存在同步冲突' })[saveState] || '已保存到本机';
   const contextItems = [
+    { label: '按 JD 生成投递版', description: '重新选材、整份改写与 A4 检查', icon: <IconFileText size={17} />, onClick: () => onOpen('tailor') },
     { label: '目标岗位与 JD', description: doc.job.title || '添加岗位要求', icon: <IconBriefcase2 size={17} />, onClick: () => onOpen('job') },
     { label: '选择项目素材', description: `已选 ${doc.resume.projectIds.length} 个项目`, icon: <IconBooks size={17} />, onClick: () => onOpen('projects') },
   ];
@@ -28,7 +29,7 @@ export function WorkspaceHeader({ doc, saveState, edit, mobileView, onMobileView
         <span className={'save-status ' + saveState} role="status" aria-label={saveLabel} title={saveLabel}>{saveState === 'saved' ? <IconCheck size={14} /> : saveState === 'synced' ? <><IconCheck size={14} /><span>已同步</span></> : saveLabel}</span>
       </div>
       <nav className="workspace-context" aria-label="当前简历使用的资料">
-        <button className="context-button job-context" aria-label="岗位与要求" title={doc.job.title || '添加目标岗位'} onClick={() => onOpen('job')}><IconBriefcase2 size={16} /><span>{doc.job.title || '添加岗位 JD'}</span><small>JD</small></button>
+        <button className="context-button job-context" aria-label="按 JD 生成投递版" title={doc.job.title || '添加目标岗位'} onClick={() => onOpen('tailor')}><IconBriefcase2 size={16} /><span>按 JD 生成</span></button>
         <button className="context-button" aria-label="选择项目素材" onClick={() => onOpen('projects')}><IconBooks size={16} /><span>已选 {doc.resume.projectIds.length} 个项目</span></button>
       </nav>
       <div className="workspace-actions">

@@ -20,7 +20,11 @@
 .resume-document .resume-section-body, .resume-document .resume-main, .resume-document .resume-aside { min-width: 0; }
 .resume-document .resume-line { display: flex; flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; margin-bottom: var(--resume-paragraph-gap); }
 .resume-document .resume-line > h3 { flex: 1 1 180px; min-width: 0; font-size: 1em; line-height: inherit; font-weight: 600; }
-.resume-document .resume-line h3 > span { display: inline; font-size: .92em; font-weight: 400; color: var(--text-secondary); }
+.resume-document .resume-line h3 > span:not(.resume-field-text) { display: inline; font-size: .92em; font-weight: 400; color: var(--text-secondary); }
+.resume-document .resume-record-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; flex: 1 1 180px; min-width: 0; }
+.resume-document .resume-record-heading > h3 { font-size: 1em; line-height: inherit; font-weight: 600; }
+.resume-document .resume-record-role { color: var(--text-secondary); }
+.resume-document .resume-record + .resume-record { margin-top: calc(var(--resume-section-gap) * .7); }
 .resume-document .resume-line > time, .resume-document .resume-date { flex: 0 0 auto; font-size: .88em; color: var(--text-secondary); white-space: normal; }
 .resume-document .resume-project + .resume-project { margin-top: calc(var(--resume-section-gap) * .7); }
 .resume-document .resume-project ul { margin: var(--resume-paragraph-gap) 0 0; padding-left: 1.25em; }

@@ -1,5 +1,13 @@
 # Prototype Instructions
 
+## JD to application-ready resume (2026-11-02)
+
+The core outcome is a truthful, JD-specific resume that can be submitted, rather than an editor that only offers paragraph suggestions. Keep the full flow accessible from New Resume, the JD page and the compact workspace toolbar: confirm candidate materials and model destination, generate an independent whole draft, measure the actual A4 rendering, review evidence and save a text-based PDF through the system print dialog. Preserve all original resumes and materials.
+
+Default new tailored drafts to a single-column A4 page, 11 pt body text and 15 mm margins. These are product defaults for the user's internship applications, not universal resume rules. Resolve overflow with independently evidenced compact expressions first, then restrained spacing adjustments, with a 10.5 pt body floor; if it still does not fit, report it instead of claiming it is ready. Do not silently cut or shrink existing manual drafts. Keep identity, contacts, education identity and dates from source records. Exclude empty placeholders from output. Actual PDF output must contain only the resume, not the editor, validation UI or model context. Never call screen-only measurement a verified PDF page count.
+
+Whole-draft model requests use the existing pluggable/authenticated streaming layer with server-owned prompts, account ownership, quotas and destination restrictions. Every rewritten field needs an exact source quote; reject unknown records, cross-project evidence, unsupported numeric claims and incomplete output atomically. Quotes and numeric checks do not prove semantic truth, so keep a final fact review. Do not send names or contacts as separate fields, silently expand detailed scope, or reuse detailed approval/history. Label local keyword extraction honestly and keep example material visibly marked. Mobile export uses Preview / Delivery Checks views; paper stays white in either theme. Verify with fictional local fixtures and mocked models, never real private resumes or paid external models for testing.
+
 ## Confirmed direction (2026-10-28)
 
 The user rejected six generated dashboard/editor concepts and supplied

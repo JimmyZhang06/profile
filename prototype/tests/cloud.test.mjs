@@ -499,7 +499,9 @@ test("account, workspace and administration enforce real session and ownership b
   await t.test(
     "concurrent model requests reserve quota atomically and stream errors are recorded without content",
     async () => {
+      const forwarded = [];
       registerCloudAdapter("compatible", async ({ messages }) => {
+        forwarded.push(messages);
         const content = messages.at(-1).content;
         const event =
           content === "emit-error"
@@ -526,11 +528,16 @@ test("account, workspace and administration enforce real session and ownership b
           alice.request("cloud/chat", "POST", {
             connectionId: modelId,
             prompt: "private fixture prompt",
+            purpose: "delivery",
+            history: [{ role: "user", content: "OLD_PRIVATE_HISTORY" }],
             context: {},
           }),
         ),
       );
       assert.deepEqual(results.map((r) => r.status).sort(), [200, 429]);
+      assert.equal(forwarded.length, 1);
+      assert.match(forwarded[0][0].content, /<resume>/);
+      assert.doesNotMatch(JSON.stringify(forwarded[0]), /OLD_PRIVATE_HISTORY/);
       let rows = await query(
         app.db,
         "SELECT * FROM model_usage WHERE user_id=$1",

@@ -13,6 +13,7 @@ import {
 import { readModelDomains } from "./model-domains.mjs";
 import { restrictMaterialContext } from "../../src/lib/materialScope.js";
 import { systemPrompt } from "../ai.mjs";
+import { deliveryPrompt } from "../delivery-prompt.mjs";
 
 export function safeConnection(row) {
   return {
@@ -70,7 +71,7 @@ export async function saveConnection(
     );
   const maxOutputTokens = Math.min(
     16384,
-    Math.max(256, Number(input.maxOutputTokens) || 4096),
+    Math.max(256, Number(input.maxOutputTokens ?? previous?.data.maxOutputTokens) || 8192),
   );
   const data = {
     name: input.name.trim(),
@@ -242,12 +243,12 @@ export async function streamModel(
     const messages = testing
       ? [{ role: "user", content: "Reply with OK." }]
       : [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: body.purpose === "delivery" ? deliveryPrompt : systemPrompt },
           {
             role: "user",
             content: "以下是当前资料：\n" + JSON.stringify(context),
           },
-          ...(Array.isArray(body.history)
+          ...(body.purpose !== "delivery" && Array.isArray(body.history)
             ? body.history
                 .slice(-10)
                 .filter(

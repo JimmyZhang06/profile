@@ -1,4 +1,5 @@
 import { restrictMaterialContext } from '../src/lib/materialScope.js';
+import { deliveryPrompt } from './delivery-prompt.mjs';
 
 const connections = new Map();
 const json = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
@@ -6,7 +7,7 @@ export function validateConnection(value) {
   const url = new URL(value.baseUrl);
   if (url.username || url.password || url.search || url.hash || !(url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))) throw new Error('请使用 HTTPS 地址；本机模型可使用 localhost 的 HTTP 地址。');
   if (!value.id || typeof value.model !== 'string' || !value.model.trim() || value.model.length > 150) throw new Error('请填写连接名称和模型名称。');
-  return { id: String(value.id), baseUrl: url.href.replace(/\/+$/, ''), model: value.model.trim(), apiKey: typeof value.apiKey === 'string' ? value.apiKey : '' };
+  return { id: String(value.id), baseUrl: url.href.replace(/\/+$/, ''), model: value.model.trim(), apiKey: typeof value.apiKey === 'string' ? value.apiKey : '', maxOutputTokens: Math.min(16384, Math.max(256, Number(value.maxOutputTokens) || 8192)) };
 }
 async function body(req) {
   let raw = '';
@@ -45,12 +46,12 @@ export function aiMiddleware() {
         catch (error) { return json(res, 400, { error: error.message }); }
       }
       const messages = testing ? [{ role: 'user', content: 'Reply with OK.' }] : [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: data.purpose === 'delivery' ? deliveryPrompt : systemPrompt },
         { role: 'user', content: '以下是当前资料：\n' + JSON.stringify(context) },
-        ...(Array.isArray(data.history) ? data.history.slice(-10).filter(m => ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').map(m => ({ role: m.role, content: m.content.slice(0, 8000) })) : []),
+        ...(data.purpose !== 'delivery' && Array.isArray(data.history) ? data.history.slice(-10).filter(m => ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').map(m => ({ role: m.role, content: m.content.slice(0, 8000) })) : []),
         { role: 'user', content: String(data.prompt || '').slice(0, 12000) },
       ];
-      const response = await fetch(connection.baseUrl + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(connection.apiKey ? { Authorization: 'Bearer ' + connection.apiKey } : {}) }, body: JSON.stringify({ model: connection.model, messages, stream: !testing }), signal: controller.signal, redirect: 'error' });
+      const response = await fetch(connection.baseUrl + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(connection.apiKey ? { Authorization: 'Bearer ' + connection.apiKey } : {}) }, body: JSON.stringify({ model: connection.model, messages, stream: !testing, max_tokens: testing ? 64 : connection.maxOutputTokens }), signal: controller.signal, redirect: 'error' });
       if (!response.ok) { await response.body?.cancel(); return json(res, response.status === 401 ? 401 : 502, { error: response.status === 401 ? '凭据无效，请检查 API Key。' : response.status === 429 ? '模型服务暂时限流，请稍后重试。' : '模型服务返回错误（' + response.status + '），请检查地址和模型名称。' }); }
       if (testing) { await response.body?.cancel(); return json(res, 200, { ok: true }); }
       if (!response.headers.get('content-type')?.includes('text/event-stream')) { await response.body?.cancel(); return json(res, 502, { error: '该连接没有返回流式响应，请检查服务兼容性。' }); }

@@ -2,6 +2,7 @@ import { assistantFieldIds, fieldValue, fieldLabel, validateSuggestions } from '
 import { visibleRecords } from './profile.js';
 import { getProjectBullets, keywordMatches, projectDetails, projectSearchText } from './projects.js';
 import { restrictMaterialContext, validateMaterialApproval } from './materialScope.js';
+import { localDelivery, parseDelivery } from './delivery.js';
 
 export const modelName = (settings, capability = 'rewrite') => settings.bindings[capability] === 'offline' ? '本地整理' : settings.connections.find(c => c.id === settings.bindings[capability])?.name || '选择模型';
 export async function api(path, payload, signal, ownerId) {
@@ -64,10 +65,10 @@ async function localResult({ prompt, doc, selected, library }) {
 }
 const adapters = new Map();
 export function registerAdapter(name, adapter) { adapters.set(name, adapter); }
-registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, settings, materialApproval, signal, onText }) => {
+registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, settings, materialApproval, signal, onText, purpose, prepared }) => {
   const connection = settings.connections.find(item => item.id === connectionId);
-  const context = buildAssistantContext(doc, selected, materialApproval, connection);
-  const response = await fetch(settings.cloudAccount ? '/api/cloud/chat' : '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Luli-Client': 'workspace', ...(settings.cloudAccount ? { 'X-Luli-Account': settings.cloudAccount } : {}) }, signal, body: JSON.stringify({ connectionId, prompt, context, ...(materialApproval ? { materialApproval } : {}), history: doc.messages.filter(m => m.status === 'done' && !m.kind && !m.materialOptimization).map(m => ({ role: m.role, content: m.text })) }) });
+  const context = purpose === 'delivery' ? restrictMaterialContext(prepared.context, materialApproval, connection) : buildAssistantContext(doc, selected, materialApproval, connection);
+  const response = await fetch(settings.cloudAccount ? '/api/cloud/chat' : '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Luli-Client': 'workspace', ...(settings.cloudAccount ? { 'X-Luli-Account': settings.cloudAccount } : {}) }, signal, body: JSON.stringify({ connectionId, prompt, context, ...(purpose ? { purpose } : {}), ...(materialApproval ? { materialApproval } : {}), history: purpose === 'delivery' ? [] : doc.messages.filter(m => m.status === 'done' && !m.kind && !m.materialOptimization).map(m => ({ role: m.role, content: m.text })) }) });
   if (!response.ok) { const error = await response.json(); throw new Error(error.error || '模型暂时不可用'); }
   const reader = response.body.getReader(), decoder = new TextDecoder();
   let buffer = '', raw = '', ended = false;
@@ -83,13 +84,15 @@ registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, sett
         if (payload === '[DONE]') { ended = true; continue; }
         let chunk; try { chunk = JSON.parse(payload); } catch { throw new Error('无法读取模型响应，请重试。'); }
         if (chunk.error) throw new Error('模型返回异常，请重试。');
+        if (chunk.choices?.some(choice => choice.finish_reason === 'length')) throw new Error('模型输出已达到长度上限，结果尚未完成，未修改简历。请在模型设置中提高单次输出上限，或减少本次候选材料后重试。');
         raw += chunk.choices?.[0]?.delta?.content || '';
-        onText(raw.split('<changes>')[0].replace(/<[^>]*$/, '').trim());
+        if (raw.length > 200_000) throw new Error('模型返回内容过长，已停止生成。');
+        onText?.(raw.split(purpose === 'delivery' ? '<resume>' : '<changes>')[0].replace(/<[^>]*$/, '').trim());
       }
       if (done) break;
     }
     if (!ended || !raw.trim()) throw new Error('连接中断，回答未完成。请重试。');
-    return parseAnswer(raw, doc);
+    return purpose === 'delivery' ? parseDelivery(raw, prepared) : parseAnswer(raw, doc);
   } finally { reader.releaseLock(); }
 });
 export async function runAssistant(input) {
@@ -98,4 +101,11 @@ export async function runAssistant(input) {
   if (input.signal.aborted) throw new DOMException('已停止', 'AbortError');
   if (connectionId === 'offline') return { ...await localResult(input), offline: true };
   return adapters.get('compatible')({ ...input, connectionId });
+}
+export async function runDelivery(input) {
+  if (input.signal.aborted) throw new DOMException('已停止', 'AbortError');
+  const connectionId = input.settings.bindings.rewrite;
+  if (connectionId === 'offline') return localDelivery(input.prepared);
+  if (!input.settings.enabled || !input.settings.capabilities.rewrite) throw new Error('请先在设置中开启 AI 改写，或切换到本地整理。');
+  return adapters.get('compatible')({ ...input, connectionId, purpose: 'delivery', prompt: '请依据本次 JD 和已确认资料制作一份简洁、可核对的整份投递草稿。' });
 }
