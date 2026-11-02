@@ -26,6 +26,7 @@ import { AdminLogin } from "./AdminLogin.jsx";
 import { MailSettings } from "./MailSettings.jsx";
 import { AdminHeader } from "./AdminHeader.jsx";
 import { AdminRecord } from "./AdminRecord.jsx";
+import { AdminAuditRecord } from "./AdminAuditRecord.jsx";
 import { ModelServices } from "./ModelServices.jsx";
 import { cloudRequest } from "../../lib/cloudClient.js";
 import { ResumeDocument } from "../ResumeDocument.jsx";
@@ -60,6 +61,7 @@ const auditLabels = {
   "template.retire": "下架模板",
   "account.delete": "注销账号",
   "admin.initialize": "初始化管理员",
+  "workspace.import.maintenance": "导入个人资料",
   "mail.save": "保存邮件服务",
   "mail.verify": "验证邮件连接",
   "mail.test": "发送测试邮件",
@@ -1194,6 +1196,10 @@ function Records({ type, api }) {
                       },
                     ]
               }
+              label={type === "audit" ? "操作记录列表" : "使用记录列表"}
+              mobileRow={type === "audit" ? row => (
+                <AdminAuditRecord record={row} title={auditLabels[row.action] || row.action} timestamp={time(row.created_at)} />
+              ) : undefined}
             />
             <Pager
               offset={offset}

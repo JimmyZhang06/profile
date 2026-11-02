@@ -116,25 +116,25 @@ export function ModelServices({ api, onDirty, initialView = 'connections' }) {
         {draft ? <>
           <div className="model-section-heading"><h2>{draft.id ? '编辑平台连接' : '添加平台连接'}</h2><Button variant="ghost" disabled={!!busy} onClick={backToList}><IconArrowLeft size={16} />返回列表</Button></div>
           {confirm === 'discard-model' ? <div className="model-inline-confirm" role="status"><p>连接有未保存的修改。返回列表会放弃这些修改。</p><div><Button variant="secondary" onClick={() => setConfirm('')}>继续编辑</Button><Button variant="ghost" onClick={() => { setDraft(null); setConfirm(''); }}>放弃修改并返回</Button></div></div> : null}
-          <form className="model-connection-form" onSubmit={saveModel}>
+          <form className="model-connection-form" autoComplete="off" onSubmit={saveModel}>
             <fieldset disabled={!!busy}>
               <div className="model-form-grid">
-                <Field label="连接名称"><input required maxLength={100} value={draft.name} placeholder="例如：团队写作助手" onChange={e => change('name', e.target.value)} /></Field>
-                <Field label="模型 ID" hint="填写服务商提供的完整模型名称。"><input required maxLength={150} value={draft.model} placeholder="服务商的模型 ID" onChange={e => change('model', e.target.value)} /></Field>
+                <Field label="连接名称"><input name="platform-connection-label" autoComplete="off" required maxLength={100} value={draft.name} placeholder="例如：团队写作助手" onChange={e => change('name', e.target.value)} /></Field>
+                <Field label="模型 ID" hint="填写服务商提供的完整模型名称。"><input name="platform-model-id" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} required maxLength={150} value={draft.model} placeholder="服务商的模型 ID" onChange={e => change('model', e.target.value)} /></Field>
               </div>
-              <Field label="API 地址"><input type="url" required value={draft.baseUrl} placeholder="https://api.example.com/v1" spellCheck={false} autoCapitalize="none" aria-describedby={`${id}-address-status`} onChange={e => change('baseUrl', e.target.value)} /></Field>
+              <Field label="API 地址"><input name="platform-model-endpoint" type="url" inputMode="url" autoComplete="off" autoCorrect="off" required value={draft.baseUrl} placeholder="https://api.example.com/v1" spellCheck={false} autoCapitalize="none" aria-describedby={`${id}-address-status`} onChange={e => change('baseUrl', e.target.value)} /></Field>
               <div id={`${id}-address-status`} className={'model-address-status ' + address.state} aria-live="polite">
                 <span>{address.state === 'allowed' ? <IconCheck size={16} /> : <IconGlobe size={16} />}{address.message}</span>
                 <button type="button" onClick={() => { openView('domains'); if (address.state === 'blocked' && !candidate) setCandidate(address.host); }}>管理允许域名<IconArrowRight size={15} /></button>
               </div>
-              <Field label="API Key" hint="加密保存；更换 API 地址时需重新填写密钥。"><input type="password" autoComplete="off" value={draft.apiKey} placeholder={draft.keyMask || '输入模型服务的 API Key'} onChange={e => change('apiKey', e.target.value)} /></Field>
+              <Field label="API Key" hint="加密保存；更换 API 地址时需重新填写密钥。"><input name="platform-model-secret" type="password" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={draft.apiKey} placeholder={draft.keyMask || '输入模型服务的 API Key'} onChange={e => change('apiKey', e.target.value)} /></Field>
               <div className="model-form-grid">
                 <Field label="每月调用上限"><input type="number" min="0" max="1000000" required value={draft.monthlyLimit} onChange={e => change('monthlyLimit', Number(e.target.value))} /></Field>
                 <Field label="单次最大输出 token"><input type="number" min="256" max="16384" required value={draft.maxOutputTokens} onChange={e => change('maxOutputTokens', Number(e.target.value))} /></Field>
               </div>
               <SelectField label="服务状态" value={draft.enabled ? 'on' : 'off'} disabled={!!busy} onChange={value => change('enabled', value === 'on')}
                 options={[{ value: 'off', label: '停用 · 仅管理员可测试' }, { value: 'on', label: '启用 · 提供给用户' }]} />
-              <Field label="操作原因"><input required minLength={2} maxLength={500} value={draft.reason} placeholder="例如：添加新的平台模型" onChange={e => change('reason', e.target.value)} /></Field>
+              <Field label="操作原因"><input name="platform-model-change-reason" autoComplete="off" required minLength={2} maxLength={500} value={draft.reason} placeholder="例如：添加新的平台模型" onChange={e => change('reason', e.target.value)} /></Field>
               <div className="model-form-actions"><Button type="submit" busy={busy === 'save'} disabled={!modelDirty || address.state !== 'allowed'}>保存平台连接</Button><span>{address.state === 'blocked' ? '先添加允许域名，再保存连接。' : '新连接默认停用，测试通过后可启用。'}</span></div>
             </fieldset>
           </form>
@@ -156,16 +156,16 @@ export function ModelServices({ api, onDirty, initialView = 'connections' }) {
         <div className="model-section-heading"><div><h2>允许访问的域名</h2><p>适用于平台模型和用户自带模型。每个子域名单独添加。</p></div><Button variant="ghost" disabled={!!busy} onClick={() => domainDirty ? setConfirm('reload-domains') : reloadDomains()}><IconRefresh size={16} />刷新</Button></div>
         {draft ? <button className="model-return-draft" disabled={!!busy} onClick={() => openView('connections')}><IconArrowLeft size={16} />返回{modelDirty ? '未保存的' : ''}连接配置<span>表单内容已保留</span></button> : null}
         {confirm === 'reload-domains' ? <div className="model-inline-confirm" role="status"><p>载入服务器最新配置将替换此页尚未保存的域名修改。</p><div><Button variant="secondary" onClick={() => setConfirm('')}>保留修改</Button><Button variant="ghost" onClick={reloadDomains}>载入最新配置</Button></div></div> : null}
-        <form className="model-domains-form" onSubmit={saveDomains}>
+        <form className="model-domains-form" autoComplete="off" onSubmit={saveDomains}>
           <fieldset disabled={!!busy}>
-            <div className="model-add-domain"><Field label="添加域名"><input value={candidate} placeholder="api.example.com" autoCapitalize="none" autoComplete="off" spellCheck={false} aria-describedby={`${id}-domain-help`} onChange={e => { setCandidate(e.target.value); setDomainError(''); }} onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addDomain(); } }} /></Field><Button variant="secondary" disabled={!candidate.trim()} onClick={addDomain}><IconPlus size={16} />添加</Button></div>
+            <div className="model-add-domain"><Field label="添加域名"><input name="platform-model-domain" inputMode="url" value={candidate} placeholder="api.example.com" autoCapitalize="none" autoComplete="off" autoCorrect="off" spellCheck={false} aria-describedby={`${id}-domain-help`} onChange={e => { setCandidate(e.target.value); setDomainError(''); }} onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addDomain(); } }} /></Field><Button variant="secondary" disabled={!candidate.trim()} onClick={addDomain}><IconPlus size={16} />添加</Button></div>
             <p className="model-domain-help" id={`${id}-domain-help`}>{candidateHost && candidate.trim() !== candidateHost ? `将添加域名：${candidateHost}` : '可直接粘贴 HTTPS API 地址；只添加域名，路径仍在连接中填写。'}</p>
             {domainError ? <p className="form-error" role="alert">{domainError}</p> : null}
             <div className="model-domain-list-heading"><span>{hosts.length} 个域名</span><small>{domainsChanged ? '有待保存的修改' : settings.source === 'admin' ? '已保存到平台' : '当前使用部署初始配置'}</small></div>
             <ul className="model-domain-list">{hosts.map(host => <li key={host}><IconGlobe size={18} /><div><strong>{host}</strong><small>{settings.hosts.includes(host) ? `平台连接 ${settings.usage[host]?.platform || 0} · 个人连接 ${settings.usage[host]?.personal || 0}` : '新增 · 保存时校验公网解析'}</small></div><Button variant="ghost" aria-label={`移除域名 ${host}`} onClick={() => { setHosts(current => current.filter(value => value !== host)); setNotice(''); }}><IconTrash size={16} />移除</Button></li>)}</ul>
             {!hosts.length ? <p className="model-domain-empty">尚无允许域名。云端模型连接将不可用，本地整理不受影响。</p> : null}
             {removed.length ? <div className="model-removal-note" role="status"><strong>将移除 {removed.length} 个域名{affected ? `，影响 ${affected} 个连接` : ''}</strong><p>{removed.join('、')}</p><p>保存后，这些连接的新请求会被阻止，原连接配置仍然保留。</p></div> : null}
-            <Field label="操作原因"><input required minLength={2} maxLength={500} value={reason} placeholder="例如：允许新的模型服务商" onChange={e => setReason(e.target.value)} /></Field>
+            <Field label="操作原因"><input name="platform-domain-change-reason" autoComplete="off" required minLength={2} maxLength={500} value={reason} placeholder="例如：允许新的模型服务商" onChange={e => setReason(e.target.value)} /></Field>
             <div className="model-form-actions"><Button type="submit" busy={busy === 'domains'} disabled={!domainsChanged || !!candidate.trim()}>保存允许域名</Button><span>{candidate.trim() ? '请先将输入的域名添加到列表。' : '保存后立即生效，无需重启服务。'}</span></div>
           </fieldset>
         </form>

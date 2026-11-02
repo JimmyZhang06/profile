@@ -81,4 +81,21 @@
   .admin-record-action > .button { min-width: 44px; min-height: 44px; padding: 8px; font-size: 13px; }
   .admin-user-record .admin-record-heading > strong { font-size: 14px; font-weight: 500; }
   .admin-user-record .admin-record-description { white-space: normal; overflow: visible; }
+  .admin-audit-record > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 72px; padding: 13px 0; list-style: none; cursor: pointer; }
+  .admin-audit-record > summary::-webkit-details-marker { display: none; }
+  .admin-audit-record > summary > span { min-width: 0; }
+  .admin-audit-record > summary strong { display: block; font-size: 15px; font-weight: 550; line-height: 1.6; overflow-wrap: anywhere; }
+  .admin-audit-record > summary time { display: block; margin-top: 3px; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+  .admin-audit-record > summary > svg { flex-shrink: 0; color: var(--text-secondary); margin-right: 4px; }
+  .admin-audit-record[open] > summary > svg { transform: rotate(180deg); }
+  .admin-audit-record > summary:focus-visible { outline: 2px solid var(--border-strong); outline-offset: -2px; }
+  .admin-audit-body { padding: 4px 0 16px; }
+  .admin-audit-body dl { margin: 0; display: grid; gap: 12px; }
+  .admin-audit-body dl > div { min-width: 0; }
+  .admin-audit-body dt { color: var(--text-secondary); font-size: 12px; line-height: 1.6; margin-bottom: 3px; }
+  .admin-audit-body dd { margin: 0; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .admin-audit-body code { font-size: 13px; }
+  .admin-audit-values { margin-top: 10px; font-size: 13px; }
+  .admin-audit-values > summary { min-height: 44px; padding-block: 12px; cursor: pointer; }
+  .admin-audit-values pre { margin: 0; padding: 12px; border-radius: 6px; background: var(--surface-subtle); font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 }
