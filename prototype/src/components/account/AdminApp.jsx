@@ -18,12 +18,14 @@ import {
 import { BrandLogo } from "../BrandLogo.jsx";
 import { ThemeMenu } from "../ThemeMenu.jsx";
 import { useTheme } from "../../hooks/useTheme.js";
+import { useMediaQuery } from "../../hooks/useMediaQuery.js";
 import { Button, Field } from "../ui/index.jsx";
 import { CurvedTabs } from "../ui/CurvedTabs.jsx";
 import { SelectField } from "../ui/SelectField.jsx";
 import { AdminLogin } from "./AdminLogin.jsx";
 import { MailSettings } from "./MailSettings.jsx";
 import { AdminHeader } from "./AdminHeader.jsx";
+import { AdminRecord } from "./AdminRecord.jsx";
 import { ModelServices } from "./ModelServices.jsx";
 import { cloudRequest } from "../../lib/cloudClient.js";
 import { ResumeDocument } from "../ResumeDocument.jsx";
@@ -72,6 +74,14 @@ function AdminEmail({ value = "" }) {
   const at = value.indexOf("@");
   return <span className="admin-email" dir="ltr">{at < 0 ? value : <>{value.slice(0, at)}<wbr />@{value.slice(at + 1)}</>}</span>;
 }
+function templateStatus(row) {
+  return !row.enabled && row.published_version === row.version ? "已下架"
+    : row.published_version === row.version ? "当前发布"
+      : row.state === "draft" ? "草稿" : "历史版本";
+}
+function invitationStatus(row) {
+  return { pending: new Date(row.expires_at) < new Date() ? "已过期" : "待接受", accepted: "已接受", revoked: "已撤销" }[row.status];
+}
 function Pager({ offset, count, onChange }) {
   return (
     <div className="admin-pager">
@@ -95,8 +105,13 @@ function Pager({ offset, count, onChange }) {
     </div>
   );
 }
-function Table({ columns, items, rowKey = "id" }) {
-  return items.length ? (
+function Table({ columns, items, rowKey = "id", mobileRow, label = "管理记录" }) {
+  const compact = useMediaQuery('(max-width: 760px)');
+  return !items.length ? <Empty>暂无记录</Empty> : compact && mobileRow ? (
+    <ul className="admin-record-list" aria-label={label}>
+      {items.map((row, index) => <li key={row[rowKey] || index}>{mobileRow(row)}</li>)}
+    </ul>
+  ) : (
     <div className="admin-table-wrap">
       <table className="admin-table">
         <thead>
@@ -127,8 +142,6 @@ function Table({ columns, items, rowKey = "id" }) {
         </tbody>
       </table>
     </div>
-  ) : (
-    <Empty>暂无记录</Empty>
   );
 }
 function useResource(path, api) {
@@ -446,6 +459,15 @@ function Users({ api, navigate, perform, onDirty, leave }) {
       : `invitations?offset=${offset}`,
     api,
   );
+  function revokeInvitation(row) {
+    perform(async () => {
+      await api("invitations", {
+        method: "POST",
+        body: { email: row.email, action: "revoke", reason: "管理员撤销未接受的邀请" },
+      });
+      resource.reload();
+    }, "邀请已撤销");
+  }
   return (
     <>
       <div className="admin-intro">
@@ -564,6 +586,16 @@ function Users({ api, navigate, perform, onDirty, leave }) {
             <Table
               items={data.items}
               rowKey={tab === "users" ? "id" : "email"}
+              label={tab === "users" ? "用户列表" : "邀请列表"}
+              mobileRow={tab === "users" ? row => (
+                <AdminRecord className="admin-user-record" title={<AdminEmail value={row.email} />}
+                  description={`${row.role === "admin" ? "管理员" : "普通用户"} · ${row.status === "active" ? "正常" : "已停用"} · 本月 ${row.used} / ${row.monthly_limit}`}
+                  actionLabel="详情" onOpen={() => navigate("users/" + row.id)} />
+              ) : row => (
+                <AdminRecord className="admin-user-record" title={<AdminEmail value={row.email} />}
+                  description={`${invitationStatus(row)} · 到期 ${time(row.expires_at)}`}
+                  action={row.status === "pending" ? <Button variant="ghost" aria-label={`撤销 ${row.email} 的邀请`} onClick={() => revokeInvitation(row)}>撤销</Button> : null} />
+              )}
               columns={
                 tab === "users"
                   ? [
@@ -616,18 +648,7 @@ function Users({ api, navigate, perform, onDirty, leave }) {
                       {
                         label: "状态",
                         render: (r) => (
-                          <Badge>
-                            {
-                              {
-                                pending:
-                                  new Date(r.expires_at) < new Date()
-                                    ? "已过期"
-                                    : "待接受",
-                                accepted: "已接受",
-                                revoked: "已撤销",
-                              }[r.status]
-                            }
-                          </Badge>
+                          <Badge>{invitationStatus(r)}</Badge>
                         ),
                       },
                       {
@@ -642,19 +663,7 @@ function Users({ api, navigate, perform, onDirty, leave }) {
                           r.status === "pending" ? (
                             <Button
                               variant="ghost"
-                              onClick={() =>
-                                perform(async () => {
-                                  await api("invitations", {
-                                    method: "POST",
-                                    body: {
-                                      email: r.email,
-                                      action: "revoke",
-                                      reason: "管理员撤销未接受的邀请",
-                                    },
-                                  });
-                                  resource.reload();
-                                }, "邀请已撤销")
-                              }
+                              onClick={() => revokeInvitation(r)}
                             >
                               撤销邀请
                             </Button>
@@ -841,6 +850,13 @@ function Templates({ api, perform, onDirty, leave }) {
                 key: r.id + ":" + r.version,
               }))}
               rowKey="key"
+              label="简历模板列表"
+              mobileRow={row => (
+                <AdminRecord title={row.name}
+                  metadata={<><span>v{row.version}</span><span>{templateStatus(row)}</span></>}
+                  description={row.description} actionLabel="预览"
+                  onOpen={() => setEditing(row)} />
+              )}
               columns={[
                 {
                   label: "模板",
@@ -855,15 +871,7 @@ function Templates({ api, perform, onDirty, leave }) {
                 {
                   label: "状态",
                   render: (r) => (
-                    <Badge>
-                      {!r.enabled && r.published_version === r.version
-                        ? "已下架"
-                        : r.published_version === r.version
-                          ? "当前发布"
-                          : r.state === "draft"
-                            ? "草稿"
-                            : "历史版本"}
-                    </Badge>
+                    <Badge>{templateStatus(r)}</Badge>
                   ),
                 },
                 {

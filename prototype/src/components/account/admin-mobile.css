@@ -66,4 +66,19 @@
   .admin-pager .button { font-size: 14px; padding-inline: 8px; }
   .admin-inline-form { padding: 16px; }
   .admin-shell .page-leave-notice { flex-shrink: 0; }
+  .admin-record-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border-subtle); }
+  .admin-record-list > li { margin: 0; padding: 0; border-bottom: 1px solid var(--border-subtle); }
+  .admin-record { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; min-height: 72px; padding: 13px 0; text-align: left; color: var(--text-primary); background: transparent; border: 0; border-radius: 0; }
+  button.admin-record:hover { background: var(--surface-hover); }
+  button.admin-record:focus-visible { outline: 2px solid var(--border-strong); outline-offset: -2px; }
+  .admin-record-copy { flex: 1; min-width: 0; }
+  .admin-record-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+  .admin-record-heading > strong { min-width: 0; font-size: 15px; font-weight: 550; line-height: 1.6; overflow-wrap: anywhere; }
+  .admin-record-metadata { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 8px; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+  .admin-record-description { display: block; margin-top: 3px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-record-open { display: flex; align-items: center; justify-content: flex-end; gap: 2px; min-width: 44px; min-height: 44px; flex-shrink: 0; font-size: 13px; color: var(--text-secondary); }
+  .admin-record-action { flex-shrink: 0; }
+  .admin-record-action > .button { min-width: 44px; min-height: 44px; padding: 8px; font-size: 13px; }
+  .admin-user-record .admin-record-heading > strong { font-size: 14px; font-weight: 500; }
+  .admin-user-record .admin-record-description { white-space: normal; overflow: visible; }
 }
