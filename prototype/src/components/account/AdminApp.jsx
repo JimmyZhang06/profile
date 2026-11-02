@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   IconLayoutDashboard,
   IconUsers,
@@ -23,6 +23,7 @@ import { CurvedTabs } from "../ui/CurvedTabs.jsx";
 import { SelectField } from "../ui/SelectField.jsx";
 import { AdminLogin } from "./AdminLogin.jsx";
 import { MailSettings } from "./MailSettings.jsx";
+import { AdminHeader } from "./AdminHeader.jsx";
 import { cloudRequest } from "../../lib/cloudClient.js";
 import { ResumeDocument } from "../ResumeDocument.jsx";
 import { initialWorkspace } from "../../lib/workspace.js";
@@ -64,6 +65,10 @@ function Badge({ children }) {
 function Empty({ children }) {
   return <div className="admin-empty">{children}</div>;
 }
+function AdminEmail({ value = "" }) {
+  const at = value.indexOf("@");
+  return <span className="admin-email" dir="ltr">{at < 0 ? value : <>{value.slice(0, at)}<wbr />@{value.slice(at + 1)}</>}</span>;
+}
 function Pager({ offset, count, onChange }) {
   return (
     <div className="admin-pager">
@@ -103,11 +108,13 @@ function Table({ columns, items, rowKey = "id" }) {
         <tbody>
           {items.map((row, index) => (
             <tr key={row[rowKey] || index}>
-              {columns.map((c) => (
+              {columns.map((c, columnIndex) => (
                 <td
                   className={c.className || ""}
                   key={c.label}
                   data-label={c.label}
+                  data-kind={c.kind || (columnIndex === 0 ? "primary" : "detail")}
+                  data-wide={c.wide || undefined}
                 >
                   {c.render(row)}
                 </td>
@@ -563,7 +570,7 @@ function Users({ api, navigate, perform, onDirty, leave }) {
                             className="admin-row-link"
                             onClick={() => navigate("users/" + r.id)}
                           >
-                            {r.email}
+                            <AdminEmail value={r.email} />
                             <small>
                               {r.role === "admin" ? "管理员" : "普通用户"}
                             </small>
@@ -589,6 +596,7 @@ function Users({ api, navigate, perform, onDirty, leave }) {
                       },
                       {
                         label: "操作",
+                        kind: "action",
                         render: (r) => (
                           <Button
                             variant="ghost"
@@ -600,7 +608,7 @@ function Users({ api, navigate, perform, onDirty, leave }) {
                       },
                     ]
                   : [
-                      { label: "邮箱", render: (r) => r.email },
+                      { label: "邮箱", render: (r) => <AdminEmail value={r.email} /> },
                       {
                         label: "状态",
                         render: (r) => (
@@ -625,6 +633,7 @@ function Users({ api, navigate, perform, onDirty, leave }) {
                       },
                       {
                         label: "操作",
+                        kind: "action",
                         render: (r) =>
                           r.status === "pending" ? (
                             <Button
@@ -698,7 +707,7 @@ function UserForm({ data, api, navigate, perform, reload, onDirty }) {
       </button>
       <div className="admin-intro">
         <div>
-          <h1>{data.user.email}</h1>
+          <h1><AdminEmail value={data.user.email} /></h1>
           <p>
             {data.user.role === "admin" ? "管理员" : "普通用户"} ·{" "}
             {data.sessionCount} 个有效登录会话
@@ -975,6 +984,7 @@ function Models({ api, perform, onDirty, leave }) {
                   },
                   {
                     label: "操作",
+                    kind: "action",
                     render: (r) => (
                       <Button
                         variant="ghost"
@@ -994,11 +1004,15 @@ function Models({ api, perform, onDirty, leave }) {
   );
 }
 function Templates({ api, perform, onDirty, leave }) {
+  const heading = useRef(null);
   const resource = useResource("templates", api),
     [editing, setEditing] = useState(null);
+  useLayoutEffect(() => {
+    heading.current?.closest(".admin-scroll")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [editing]);
   return (
     <>
-      <div className="admin-intro">
+      <div className="admin-intro" ref={heading}>
         <div>
           <h1>简历模板</h1>
           <p>发布固定版本。已有简历保留原版式，由用户主动更新。</p>
@@ -1078,6 +1092,7 @@ function Templates({ api, perform, onDirty, leave }) {
                 },
                 {
                   label: "操作",
+                  kind: "action",
                   render: (r) => (
                     <Button variant="ghost" onClick={() => setEditing(r)}>
                       预览与管理
@@ -1368,6 +1383,7 @@ function Records({ type, api }) {
                       },
                       {
                         label: "原因与变更",
+                        wide: true,
                         render: (r) => (
                           <div>
                             {r.reason}
@@ -1402,6 +1418,7 @@ function Records({ type, api }) {
   );
 }
 export default function AdminApp({ account }) {
+  const scroll = useRef(null);
   const theme = useTheme(),
     [page, setPage] = useState(location.hash.slice(1) || "overview"),
     [verified, setVerified] = useState(false),
@@ -1410,6 +1427,9 @@ export default function AdminApp({ account }) {
     [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false),
     [pending, setPending] = useState(null);
+  useLayoutEffect(() => {
+    scroll.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [page, verified]);
   useEffect(() => {
     document.title = "管理后台 · 履历";
   }, []);
@@ -1431,6 +1451,7 @@ export default function AdminApp({ account }) {
     setDirty(false);
     setPending(null);
     setError("");
+    scroll.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
     if (typeof next === "function") {
       next();
       return;
@@ -1545,15 +1566,8 @@ export default function AdminApp({ account }) {
         </div>
       </aside>
       <section className="admin-main">
-        <header className="admin-topbar">
-          <span>
-            {sections.find(([id]) => id === section)?.[1] || "管理后台"}
-          </span>
-          <span>
-            <IconShieldCheck size={15} />
-            管理员 · 已验证
-          </span>
-        </header>
+        <AdminHeader sections={sections} section={section} navigate={navigate} theme={theme}
+          onLogout={() => navigate(() => perform(() => account.logout(), "已退出登录"))} />
         {pending ? (
           <div className="page-leave-notice">
             <span>当前表单还有未保存内容。</span>
@@ -1565,7 +1579,7 @@ export default function AdminApp({ account }) {
             </Button>
           </div>
         ) : null}
-        <div className="admin-scroll" aria-busy={busy}>
+        <div className="admin-scroll" ref={scroll} aria-busy={busy}>
           <div className="admin-content">
             {error ? (
               <p className="admin-error" role="alert">
