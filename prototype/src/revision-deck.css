@@ -17,8 +17,7 @@
   .revision-deck-viewport { position: relative; display: flex; align-items: flex-start; gap: 16px; width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none; border-radius: 14px; overflow-anchor: none; }
   .revision-deck-viewport::-webkit-scrollbar { display: none; }
   .revision-deck-viewport:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
-  .revision-deck-slide { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
-  .revision-deck-slide[aria-hidden="true"] { max-height: 100%; overflow: hidden; }
+  .revision-deck-slide { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; }
   .revision-deck .revision-card { margin: 0; border-radius: 14px; background: var(--surface-card); box-shadow: none; }
   .revision-deck .revision-heading { align-items: flex-start; padding: 13px 14px; background: none; }
   .revision-deck .revision-heading > button { align-items: flex-start; text-align: left; line-height: 1.6; }
