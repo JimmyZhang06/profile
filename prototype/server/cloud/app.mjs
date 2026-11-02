@@ -267,6 +267,12 @@ export async function createCloudApp(config) {
         result = { connections: await listConnections(db, actor.user.id) };
       else if (path === "/api/cloud/connections" && req.method === "POST")
         result = await saveConnection(db, actor.user.id, body, config);
+      else if (path === "/api/admin/models/test" && req.method === "POST") {
+        await limit(db, "model-test:" + actor.user.id, 6, 60);
+        result = await streamModel(req, res, { connectionId: body.connectionId }, actor, db, config, {
+          testing: true, platformTest: true, dispatcherFactory: config.modelDispatcher,
+        });
+      }
       else if (
         ["/api/cloud/chat", "/api/cloud/test"].includes(path) &&
         req.method === "POST"

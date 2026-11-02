@@ -8,7 +8,9 @@ import {
   validateModelDestination,
   modelDispatcher,
   HttpError,
+  audit,
 } from "./security.mjs";
+import { readModelDomains } from "./model-domains.mjs";
 import { restrictMaterialContext } from "../../src/lib/materialScope.js";
 import { systemPrompt } from "../ai.mjs";
 
@@ -59,7 +61,7 @@ export async function saveConnection(
   );
   const baseUrl = validateModelDestination(
       input.baseUrl,
-      config.allowedModelHosts,
+      (await readModelDomains(db, config)).hosts,
     ),
     previous = await one(
       db,
@@ -143,14 +145,17 @@ export async function streamModel(
   actor,
   db,
   config,
-  { testing = false, dispatcherFactory = modelDispatcher } = {},
+  { testing = false, platformTest = false, dispatcherFactory = modelDispatcher } = {},
 ) {
+  assert(!platformTest || (testing && actor.access.role === "admin"), 403, "需要管理员权限");
   const connection = await one(
     db,
     "SELECT * FROM model_connections WHERE id=$1 AND ((owner_id=$2 AND scope='user') OR scope='platform')",
     [body.connectionId, actor.user.id],
   );
-  assert(connection?.enabled, 404, "模型连接不存在或已停用");
+  assert(platformTest ? connection?.scope === "platform" : connection?.enabled, 404, "模型连接不存在或已停用");
+  const allowedHosts = (await readModelDomains(db, config)).hosts;
+  validateModelDestination(connection.data.baseUrl, allowedHosts);
   const safe = safeConnection(connection);
   let context;
   try {
@@ -201,7 +206,7 @@ export async function streamModel(
         [connection.id],
       );
       assert(
-        model.enabled && total.count < model.monthly_limit,
+        (model.enabled || platformTest) && total.count < model.monthly_limit,
         429,
         "平台模型已达到本月调用上限",
       );
@@ -224,7 +229,7 @@ export async function streamModel(
       if (!res.writableEnded) controller.abort();
     };
   res.on("close", cancel);
-  const timer = setTimeout(() => controller.abort(), 120000);
+  const timer = setTimeout(() => controller.abort(), testing ? 20000 : 120000);
   let dispatcher,
     status = "failed",
     errorType = "CONNECTION_ERROR",
@@ -232,7 +237,7 @@ export async function streamModel(
   try {
     dispatcher = await dispatcherFactory(
       connection.data.baseUrl,
-      config.allowedModelHosts,
+      allowedHosts,
     );
     const messages = testing
       ? [{ role: "user", content: "Reply with OK." }]
@@ -262,6 +267,7 @@ export async function streamModel(
     )({
       connection: {
         ...connection.data,
+        ...(testing ? { maxOutputTokens: 64 } : {}),
         apiKey: decryptSecret(
           connection.secret,
           config.credentialKey,
@@ -278,17 +284,21 @@ export async function streamModel(
       errorType = "PROVIDER_" + response.status;
       throw new HttpError(
         502,
-        response.status === 429
-          ? "模型服务限流，请稍后重试。"
+        response.status === 429 ? "模型服务限流或额度不足，请稍后重试。"
+          : [401, 403].includes(response.status) ? "模型服务拒绝认证，请检查 API Key 和模型访问权限。"
+          : response.status === 404 ? "未找到模型接口，请检查 API 地址的路径与模型 ID。"
           : "模型连接失败，请检查服务和凭据。",
+        errorType,
       );
     }
     if (testing) {
       const data = await response.json();
+      assert(typeof data.choices?.[0]?.message?.content === "string" && data.choices[0].message.content.trim(),
+        502, "服务未返回有效的模型回复，请检查模型 ID 与接口兼容性。", "INVALID_MODEL_RESPONSE");
       usage = data.usage || {};
       status = "succeeded";
       errorType = null;
-      return { ok: true };
+      return { ok: true, model: connection.data.model, durationMs: Date.now() - started };
     }
     assert(
       response.headers.get("content-type")?.includes("text/event-stream"),
@@ -343,7 +353,9 @@ export async function streamModel(
     if (controller.signal.aborted) {
       status = "cancelled";
       errorType = "CANCELLED";
+      if (testing && !res.destroyed) throw new HttpError(504, "模型测试超时，请稍后重试。", "MODEL_TEST_TIMEOUT");
     }
+    else if (error.code) errorType = error.code;
     if (res.headersSent) res.end();
     else
       throw error instanceof HttpError
@@ -367,5 +379,7 @@ export async function streamModel(
         errorType,
       ],
     );
+    if (platformTest) await audit(db, actor.user, "model.test", connection.id, null,
+      { status, errorType, model: connection.data.model, durationMs: Date.now() - started }, "管理员主动测试平台模型连接");
   }
 }

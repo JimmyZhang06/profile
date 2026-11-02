@@ -106,7 +106,7 @@ export function validateModelDestination(baseUrl, hosts) {
       !isIP(url.hostname.replace(/^\[|\]$/g, "")) &&
       hosts.includes(url.hostname.toLowerCase()),
     400,
-    "云端模型仅支持部署配置中允许的 HTTPS 域名，不能访问 localhost 或内网地址",
+    "该地址尚未获准访问。请使用管理端“AI 服务 → 允许域名”中已添加的公网 HTTPS 域名。",
     "DESTINATION_BLOCKED",
   );
   return url.href.replace(/\/+$/, "");

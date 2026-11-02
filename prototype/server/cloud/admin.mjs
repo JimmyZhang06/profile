@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { one, query } from "./database.mjs";
 import { assert, audit, limit } from "./security.mjs";
 import { safeConnection, saveConnection } from "./models.mjs";
+import { readModelDomains, modelDomainSettings, saveModelDomains } from "./model-domains.mjs";
 import {
   resumeTemplates,
   templateDesign,
@@ -50,6 +51,11 @@ export async function adminRoute({
       Math.min(100000, Number(url.searchParams.get("offset")) || 0),
     );
   if (path === "/mail" && method === "GET") return mail.get();
+  if (path === "/model-domains" && method === "GET") return modelDomainSettings(db, config);
+  if (path === "/model-domains" && method === "PUT") {
+    await limit(db, "model-domains:" + actor.user.id, 12, 60);
+    return saveModelDomains(db, config, body, actor.user);
+  }
   if (path === "/mail" && method === "PUT") return mail.save(body, actor.user);
   if (["/mail/verify", "/mail/test"].includes(path) && method === "POST") {
     await limit(db, "smtp-test:" + actor.user.id, 4, 60);
@@ -70,7 +76,7 @@ export async function adminRoute({
       mailConfigured: (await mail.status()).mailMode === "smtp",
       mailMode: (await mail.status()).mailMode,
       database: config.databaseUrl ? "PostgreSQL" : "本机开发数据库",
-      allowedModelHosts: config.allowedModelHosts,
+      allowedModelHosts: (await readModelDomains(db, config)).hosts,
     };
   if (path === "/users" && method === "GET")
     return {
@@ -204,7 +210,7 @@ export async function adminRoute({
           "SELECT * FROM model_connections WHERE scope='platform' ORDER BY id",
         )
       ).map(safeConnection),
-      allowedHosts: config.allowedModelHosts,
+      allowedHosts: (await readModelDomains(db, config)).hosts,
     };
   if (path === "/models" && method === "POST")
     return db.transaction().execute(async (tx) => {

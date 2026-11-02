@@ -24,6 +24,7 @@ import { SelectField } from "../ui/SelectField.jsx";
 import { AdminLogin } from "./AdminLogin.jsx";
 import { MailSettings } from "./MailSettings.jsx";
 import { AdminHeader } from "./AdminHeader.jsx";
+import { ModelServices } from "./ModelServices.jsx";
 import { cloudRequest } from "../../lib/cloudClient.js";
 import { ResumeDocument } from "../ResumeDocument.jsx";
 import { initialWorkspace } from "../../lib/workspace.js";
@@ -50,6 +51,8 @@ const auditLabels = {
   "invitation.pending": "登记邀请",
   "invitation.revoked": "撤销邀请",
   "model.save": "保存平台模型",
+  "model.domains.save": "更新模型允许域名",
+  "model.test": "测试平台模型",
   "template.draft": "保存模板草稿",
   "template.publish": "发布模板版本",
   "template.retire": "下架模板",
@@ -382,6 +385,7 @@ function Overview({ api, navigate }) {
                   <p>
                     配置允许访问的服务域名后，可以添加平台模型。内置本地整理仍可使用。
                   </p>
+                  <Button variant="ghost" onClick={() => navigate("models/domains")}>配置允许域名<IconArrowRight size={15} /></Button>
                 </div>
               </div>
             ) : null}
@@ -777,229 +781,6 @@ function UserForm({ data, api, navigate, perform, reload, onDirty }) {
           </Button>
         </div>
       </div>
-    </>
-  );
-}
-function Models({ api, perform, onDirty, leave }) {
-  const resource = useResource("models", api),
-    [draft, setDraft] = useState(null),
-    [baseline, setBaseline] = useState("");
-  const dirty = !!draft && JSON.stringify(draft) !== baseline;
-  useEffect(() => {
-    onDirty(dirty);
-    return () => onDirty(false);
-  }, [dirty]);
-  function begin(value) {
-    setDraft(value);
-    setBaseline(JSON.stringify(value));
-  }
-  return (
-    <>
-      <div className="admin-intro">
-        <div>
-          <h1>AI 服务</h1>
-          <p>配置平台提供的连接；用户自带模型凭据由本人管理。</p>
-        </div>
-        <Button
-          onClick={() =>
-            leave(() =>
-              begin({
-                name: "",
-                model: "",
-                baseUrl: "",
-                apiKey: "",
-                enabled: true,
-                monthlyLimit: 1000,
-                maxOutputTokens: 4096,
-                reason: "",
-              }),
-            )
-          }
-        >
-          <IconPlus size={16} />
-          添加平台模型
-        </Button>
-      </div>
-      <Load resource={resource}>
-        {(data) => (
-          <>
-            {draft ? (
-              <form
-                className="admin-detail-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  perform(async () => {
-                    await api("models", { method: "POST", body: draft });
-                    setDraft(null);
-                    onDirty(false);
-                    resource.reload();
-                  }, "平台连接已保存");
-                }}
-              >
-                <div className="admin-section-title">
-                  <h2>{draft.id ? "编辑平台连接" : "新平台连接"}</h2>
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      leave(() => {
-                        setDraft(null);
-                        onDirty(false);
-                      })
-                    }
-                  >
-                    返回列表
-                  </Button>
-                </div>
-                <Field label="名称">
-                  <input
-                    required
-                    value={draft.name}
-                    onChange={(e) =>
-                      setDraft({ ...draft, name: e.target.value })
-                    }
-                  />
-                </Field>
-                <Field label="模型 ID">
-                  <input
-                    required
-                    value={draft.model}
-                    onChange={(e) =>
-                      setDraft({ ...draft, model: e.target.value })
-                    }
-                  />
-                </Field>
-                <Field
-                  label="API 地址"
-                  hint={
-                    "允许的域名：" +
-                    (data.allowedHosts.join("、") || "尚未配置")
-                  }
-                >
-                  <input
-                    type="url"
-                    required
-                    value={draft.baseUrl}
-                    placeholder="https://api.example.com/v1"
-                    onChange={(e) =>
-                      setDraft({ ...draft, baseUrl: e.target.value })
-                    }
-                  />
-                </Field>
-                <Field
-                  label="API Key"
-                  hint="加密保存。已有凭据只显示掩码，更换地址需重新填写。"
-                >
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={draft.apiKey || ""}
-                    placeholder={draft.keyMask || "输入凭据"}
-                    onChange={(e) =>
-                      setDraft({ ...draft, apiKey: e.target.value })
-                    }
-                  />
-                </Field>
-                <div className="field-grid">
-                  <Field label="模型月调用上限">
-                    <input
-                      type="number"
-                      min="0"
-                      max="1000000"
-                      value={draft.monthlyLimit}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          monthlyLimit: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label="单次最大输出 token">
-                    <input
-                      type="number"
-                      min="256"
-                      max="16384"
-                      value={draft.maxOutputTokens}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          maxOutputTokens: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </Field>
-                </div>
-                <SelectField
-                  label="服务状态"
-                  value={draft.enabled ? "on" : "off"}
-                  onChange={(value) =>
-                    setDraft({ ...draft, enabled: value === "on" })
-                  }
-                  options={[
-                    { value: "on", label: "启用" },
-                    { value: "off", label: "停用" },
-                  ]}
-                />
-                <Field label="操作原因">
-                  <input
-                    required
-                    minLength={2}
-                    value={draft.reason || ""}
-                    onChange={(e) =>
-                      setDraft({ ...draft, reason: e.target.value })
-                    }
-                  />
-                </Field>
-                <Button
-                  type="submit"
-                  disabled={!dirty || !data.allowedHosts.length}
-                >
-                  保存平台连接
-                </Button>
-              </form>
-            ) : (
-              <Table
-                items={data.items}
-                columns={[
-                  {
-                    label: "平台模型",
-                    render: (r) => (
-                      <strong>
-                        {r.name}
-                        <small>{r.model}</small>
-                      </strong>
-                    ),
-                  },
-                  {
-                    label: "状态",
-                    render: (r) => (
-                      <Badge>{r.enabled ? "已启用" : "已停用"}</Badge>
-                    ),
-                  },
-                  { label: "月上限", render: (r) => r.monthlyLimit },
-                  {
-                    label: "凭据",
-                    className: "optional-column",
-                    render: (r) => r.keyMask || "未配置",
-                  },
-                  {
-                    label: "操作",
-                    kind: "action",
-                    render: (r) => (
-                      <Button
-                        variant="ghost"
-                        onClick={() => begin({ ...r, apiKey: "", reason: "" })}
-                      >
-                        编辑连接
-                      </Button>
-                    ),
-                  },
-                ]}
-              />
-            )}
-          </>
-        )}
-      </Load>
     </>
   );
 }
@@ -1596,7 +1377,7 @@ export default function AdminApp({ account }) {
                   <Users {...shared} />
                 )
               ) : section === "models" ? (
-                <Models {...shared} />
+                <ModelServices {...shared} initialView={page.endsWith("/domains") ? "domains" : "connections"} />
               ) : section === "mail" ? (
                 <MailSettings {...shared} />
               ) : section === "templates" ? (
