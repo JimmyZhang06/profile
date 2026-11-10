@@ -12,6 +12,8 @@ import {
   parseDelivery,
   assembleDelivery,
   nextDeliveryFit,
+  nextPageAdjustment,
+  deliveryChecks,
   deliveryIssues,
   localDelivery,
   deliveryMaterials,
@@ -21,12 +23,67 @@ import {
   initialWorkspace,
   validWorkspace,
   toMarkdown,
+  fieldValue,
+  setField,
+  mutateResume,
+  undoDocument,
 } from "../src/lib/workspace.js";
+import {requirementReview, reviewFields, reviewValue, setReviewValue, reviewExperiences, setReviewExperience} from "../src/lib/deliveryReview.js";
 import { runDelivery, runAssistant } from "../src/lib/assistant.js";
 import { chatDeliveryJob, jobFromListing, jobFromFragment, screeningBatches, restoreDeliveryIds, deliveryModelContext, shortlistedContext } from "../src/lib/deliverySelection.js";
 
 const prepare = (approval) =>
   prepareDelivery({ job, profile, projects, approval, connection });
+test("in-product proofing preserves a manual rewrite, hidden sources, undo and the original archive", () => {
+  const prepared = prepare(), doc = assembleDelivery(prepared, parseDelivery(plan, prepared));
+  const source = structuredClone(doc.resume);
+  let r = setReviewValue(doc.resume, "summary", "已由本人核对的表达");
+  const item = reviewExperiences(r).find((p) => p.id === "atlas");
+  r = setReviewExperience(r, item, false);
+  const fit = nextPageAdjustment(r, doc.delivery.changes);
+  assert.equal(fit.resume.summary, "已由本人核对的表达");
+  assert.equal(fieldValue(fit.resume,"atlas:0"),fieldValue(source,"atlas:0"));
+  assert(!reviewFields(fit.resume).some((f) => f.value === "atlas:0"));
+  assert.deepEqual(setReviewExperience(fit.resume, item, true).projectIds, source.projectIds);
+  const saved = mutateResume(doc, fit.resume, "一页校稿");
+  assert.deepEqual(undoDocument(saved).resume, source);
+  assert.deepEqual(doc.resume, source);
+  assert.deepEqual(doc.resume.sources, prepared.seed.resume.sources);
+  assert.equal(validWorkspace({...initialWorkspace(), documents:[saved], activeId:saved.id}), true);
+});
+test("JD evidence points to the current copy and distinguishes edited wording and hidden experience", () => {
+  const prepared = prepare(), doc = assembleDelivery(prepared, parseDelivery(plan, prepared));
+  const requirement = doc.delivery.requirements[0];
+  const review = (r) => requirementReview(r, doc.delivery, requirement);
+  assert.deepEqual(review(doc.resume), {label:'可对照当前正文', field:'atlas:0'});
+  const marked = {...doc.resume, textStyles:{'atlas:0':{marks:[{start:0, end:2, bold:true}]}}};
+  const fitted = nextPageAdjustment(marked, doc.delivery.changes);
+  assert.equal(fieldValue(fitted.resume, 'atlas:0'), fieldValue(marked, 'atlas:0'));
+  const edited = setReviewValue(doc.resume, 'atlas:0', '整理访谈记录与需求清单。');
+  assert.deepEqual(review(edited), {label:'措辞已调整，请核对', field:'atlas:0'});
+  const item = reviewExperiences(edited).find((p) => p.id === 'atlas');
+  const hidden = setReviewExperience(edited, item, false);
+  assert.deepEqual(review(hidden), {label:'关联经历未展示', field:'experiences'});
+  assert.deepEqual(review(setReviewExperience(hidden, item, true)), review(edited));
+});
+test("actionable header and education fixes work on legacy and structured drafts without counting an arrival date as a phone", () => {
+  const legacy = {...prepare().seed.resume, contact:"杭州", contactItems:undefined};
+  const dated = setReviewValue(legacy, "@availability", "2028 届，2027-03-01 到岗，可实习 6 个月，每周 4 天");
+  const target = {text:"请写毕业年份、到岗时间、可实习时长和每周出勤天数"};
+  assert.deepEqual(deliveryChecks(dated, null, target).map((x) => x.target), ["@email"]);
+  let r = setReviewValue({...dated, school:"", educationEntries:[]}, "@email", "apply@example.test");
+  assert(deliveryChecks(r, null, target).some((x) => x.target === "@school"));
+  r = setReviewValue(r, "@school", "测试大学");
+  r = setReviewValue(r, "@school", "测试大学新校区");
+  assert.equal(r.educationEntries.length, 1);
+  assert(reviewFields(r).some((f) => f.value === "@school" && f.paperField === r.educationEntries[0].id + ":organization"));
+  assert.equal(reviewValue(r, "@email"), "apply@example.test");
+  assert(r.contact.includes("杭州"));
+  assert.deepEqual(deliveryChecks(r, null, target), []);
+  assert.equal(reviewValue(legacy, "@availability"), "");
+  r = setField(r, "summary", "");
+  assert.deepEqual(deliveryChecks(setReviewValue(r, "@availability", "2028 届，可到岗，6 个月"), null, target).map((x) => x.target), ["@availability"]);
+});
 test("materials arriving after the form opens use current defaults and preserve each explicit choice", () => {
   const archived = {...projects[1], id:"archived", archived:true};
   const sample = {...projects[0], id:"sample", example:true};

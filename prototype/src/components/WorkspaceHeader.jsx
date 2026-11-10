@@ -36,7 +36,7 @@ export function WorkspaceHeader({ doc, saveState, edit, mobileView, onMobileView
         <div className="history-actions" aria-label="编辑历史"><IconButton label="撤销修改" disabled={!doc.undo.length || !!edit} onClick={onUndo}><IconArrowBackUp size={17} /></IconButton><IconButton label="重做修改" disabled={!doc.redo.length || !!edit} onClick={onRedo}><IconArrowForwardUp size={17} /></IconButton></div>
         {pending ? <button className="review-indicator" aria-label={`${pending} 条建议待审核`} onClick={() => onOpen('review')}><span className="pending-dot" />{pending}<span>条建议</span></button> : null}
         <button type="button" className="workspace-design-toggle" aria-label={designOpen ? '完成排版' : '排版与模板'} aria-expanded={designOpen} aria-controls="resume-design-panel" title={designOpen ? '完成排版，恢复对话布局' : '排版与模板'} onClick={onDesignToggle}>{designOpen ? <IconCheck size={18} /> : <IconTypography size={18} />}<span>{designOpen ? '完成排版' : '排版与模板'}</span></button>
-        <Button className="workspace-export" onClick={() => onOpen('export')}><IconDownload size={15} />导出</Button>
+        <Button className="workspace-export" title="一页校稿与导出" aria-label="一页校稿与导出" onClick={() => onOpen('export')}><IconDownload size={15} />{isMobile ? '校稿' : '校稿与导出'}</Button>
       </div>
     </header>
     <div className="mobile-workspace-bar">

@@ -8,6 +8,7 @@ export function Sidebar({ state, saveState, account, page, accountOpen, isMobile
   const [search, setSearch] = useState('');
   const searchInput = useRef(null);
   const expanded = sidebarOpen;
+  const creating = page === 'tailor' || page === 'new';
   const query = search.trim().toLocaleLowerCase();
   const docs = state.documents.filter(doc => !doc.archived && [doc.title, doc.job.company, doc.job.title].join(' ').toLocaleLowerCase().includes(query));
   const trashCount = state.documents.filter(doc => doc.archived).length;
@@ -28,7 +29,7 @@ export function Sidebar({ state, saveState, account, page, accountOpen, isMobile
     </div>
     <nav className="sidebar-nav" aria-label="工作区导航">
       {!expanded ? <IconButton label="展开侧栏" onClick={onToggle}><IconLayoutSidebar size={20} stroke={1.65} /></IconButton> : null}
-      <button type="button" className={'nav-row new-document ' + (page === 'new' ? 'active' : '')} aria-current={page === 'new' ? 'page' : undefined} aria-label="新建岗位简历" data-tooltip={!expanded ? '新建岗位简历' : undefined} onClick={onNew}><IconEdit size={20} stroke={1.65} />{expanded ? <span>新建简历</span> : null}</button>
+      <button type="button" className={'nav-row new-document ' + (creating ? 'active' : '')} aria-current={creating ? 'page' : undefined} aria-label="新建岗位简历" data-tooltip={!expanded ? '新建岗位简历' : undefined} onClick={onNew}><IconEdit size={20} stroke={1.65} />{expanded ? <span>新建简历</span> : null}</button>
       <button type="button" className={'nav-row ' + (['library', 'profile', 'projects'].includes(page) ? 'active' : '')} aria-current={['library', 'profile', 'projects'].includes(page) ? 'page' : undefined} aria-label="资料库" data-tooltip={!expanded ? '资料库' : undefined} onClick={() => onOpen('library')}><IconBooks size={20} stroke={1.65} />{expanded ? <span>资料库</span> : null}</button>
     </nav>
 

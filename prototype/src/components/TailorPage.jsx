@@ -17,6 +17,7 @@ import {
 import { runDelivery } from "../lib/assistant.js";
 import { DeliveryPreview } from "./DeliveryPreview.jsx";
 import { AssistantIdentity } from "./AssistantIdentity.jsx";
+import { DeliverySteps } from "./DeliverySteps.jsx";
 
 export function TailorPage({
   job: initialJob,
@@ -24,12 +25,15 @@ export function TailorPage({
   library,
   settings,
   savedOptions,
+  defaultAvailability = "",
+  onRememberAvailability,
   sessionExpired = false,
   example = false,
   onBack,
   onReady,
   onConfigure,
   onLibrary,
+  onManual,
 }) {
   const [job, setJob] = useState(
     initialJob || { company: "", title: "", text: "" },
@@ -176,9 +180,11 @@ export function TailorPage({
   return (
     <Page
       title="按 JD 生成简历"
-      description="贴入职位描述，从资料库挑选匹配的经历，生成一份可以继续编辑的 A4 简历。"
+      description="粘贴 JD，确认参与选材的经历。生成后可以在纸面上改字、取舍经历并保存 PDF。"
       onBack={onBack}
       className="page-wide tailor-page"
+      actions={onManual && <Button variant="ghost" disabled={busy} onClick={() => onManual(job, options)}>手动创建简历</Button>}
+      navigation={<DeliverySteps current={1} />}
       dirty={
         busy ||
         job.text !== (initialJob?.text || "") ||
@@ -237,12 +243,14 @@ export function TailorPage({
             placeholder="粘贴完整 JD…"
           />
         </Field>
-        {/到岗|毕业年份|实习时长/.test(job.text) ? (
+        {/到岗|毕业年份|毕业时间|实习时长|每周|周出勤/.test(job.text) ? <>
           <Field label="本次投递的到岗安排" hint="原样写入本份简历页首。可在这里补充毕业年份、到岗时间和可持续时长。">
             <input maxLength={180} value={availability} onChange={(e) => setAvailabilityOverride(e.target.value)}
               placeholder="按自己的实际情况填写" />
           </Field>
-        ) : null}
+          {onRememberAvailability && availability.trim() && availability.trim() !== defaultAvailability &&
+            <Button variant="ghost" onClick={() => onRememberAvailability(availability.trim())}>存为下次投递的默认安排</Button>}
+        </> : null}
         <section className="tailor-materials">
           <header>
             <div>

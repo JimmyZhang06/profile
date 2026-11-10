@@ -1,5 +1,9 @@
 # Prototype Instructions
 
+## Self-service application workflow (2026-11-11)
+
+A user should be able to complete each application inside the site. New Resume opens JD and material selection. Both generated and existing drafts open the same live A4 proofreader. Let the user follow a check directly to its field, compare source-backed wording, choose which experiences appear, and adjust typography before saving. Keep manual wording and source records intact during automatic fitting. In final review, distinguish evidence for visible wording from evidence for an omitted or edited passage. Verify the complete route through the ordinary UI, including a near-limit draft printed to a single text-based PDF.
+
 ## JD to application-ready resume (2026-11-02)
 
 The core outcome is a truthful, JD-specific resume that can be submitted, rather than an editor that only offers paragraph suggestions. Keep the full flow accessible from New Resume, the JD page and the compact workspace toolbar: confirm candidate materials and model destination, generate an independent whole draft, measure the actual A4 rendering, review evidence and save a text-based PDF through the system print dialog. Preserve all original resumes and materials.

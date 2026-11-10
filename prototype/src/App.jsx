@@ -27,6 +27,7 @@ import { mergeImportedWorkspace } from './lib/cloudWorkspace.js';
 import { applyProfileSelection, profileHasContent } from './lib/profile.js';
 import { getResumeDesign } from './lib/resumeDesign.js';
 import { chatDeliveryJob, jobFromFragment } from './lib/deliverySelection.js';
+import { reviewValue, setReviewValue } from './lib/deliveryReview.js';
 import { activeDocument, moveDocumentToTrash, restoreDocument } from './lib/documents.js';
 
 export function App({ workspace, account }) {
@@ -34,6 +35,7 @@ export function App({ workspace, account }) {
   const [incomingJob] = useState(() => jobFromFragment(window.location.hash));
   const [tailorJob, setTailorJob] = useState(incomingJob);
   const [tailorOptions, setTailorOptions] = useState(null);
+  const [tailorInstance, setTailorInstance] = useState(0), [tailorReturn, setTailorReturn] = useState(null);
   const isMobile = useMediaQuery('(max-width: 760px)');
   const { state, setState, saveState, error, conflict } = workspace;
   const [catalog, setCatalog] = useState(null);
@@ -105,10 +107,13 @@ export function App({ workspace, account }) {
     if (!guard() || name === page) return;
     if (!currentDoc && ['job', 'versions', 'review', 'source', 'experience', 'export', 'rename', 'delete'].includes(name)) name = 'new';
     request(() => {
-      setTailorJob(null);
+      const newJob = name === 'new';
+      if (newJob) setTailorInstance((n) => n + 1);
+      setTailorReturn(name === 'tailor' && page === 'export' ? 'export' : null);
+      setTailorJob(newJob ? {company: '', title: '', text: ''} : null);
       setTailorOptions(null);
-      if (name === 'tailor') stop();
-      finish(name);
+      if (newJob || name === 'tailor') stop();
+      finish(newJob ? 'tailor' : name);
       if (window.matchMedia('(min-width: 761px) and (max-width: 1180px)').matches) setState(s => ({ ...s, ui: { ...s.ui, sidebar: false } }));
     });
   }
@@ -235,6 +240,28 @@ export function App({ workspace, account }) {
     if (JSON.stringify(latest.current.profile) !== expected) {notify('资料已更新，请先载入最新内容'); return false;}
     setState(s => ({...s, profile})); return true;
   }
+  function saveReviewedResume(resume, base) {
+    const current = latest.current.documents.find((item) => item.id === doc.id && !item.archived);
+    if (!current || conflict || (current.resume !== base && JSON.stringify(current.resume) !== JSON.stringify(base))) return false;
+    if (JSON.stringify(resume) !== JSON.stringify(base)) {
+      changeDoc((d) => d.resume === base || JSON.stringify(d.resume) === JSON.stringify(base) ? mutateResume(d, resume, '一页校稿') : d);
+    }
+    return true;
+  }
+  function rememberAvailability(value) {
+    try {
+      const profile = latest.current.profile;
+      if (reviewValue(profile, '@availability') !== value) {
+        // The form explicitly saves this one field. Never copy the current
+        // resume or its tailored wording back into the source library.
+        const next = setReviewValue(profile, '@availability', value);
+        const {textStyles, ...personal} = next;
+        if (!saveProfile(personal, JSON.stringify(profile))) return false;
+      }
+      notify('已保存到个人资料，下次投递会自动带入');
+      return true;
+    } catch (error) { notify(error.message); return false; }
+  }
   function applyProfile(profile, selection, groups) {
     stop(); changeDoc(d => mutateResume(d, applyProfileSelection(d.resume, profile, selection, groups), '从资料库更新简历'));
     setSelected(null); finish(null); setMobileView('document'); notify('所选资料已更新到当前简历，可以撤销');
@@ -269,14 +296,14 @@ export function App({ workspace, account }) {
     {page === 'trash' ? <DocumentTrashPage documents={state.documents} onBack={() => navigate(null)} onRestore={restoreDeletedDocument} /> : null}
     {['library', 'profile', 'projects'].includes(page) ? <LibraryPage hasActiveDocument={!!currentDoc} key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{hasActiveDocument: !!currentDoc, busy: !!busyId, settings: state.settings, onOpenJob: () => open('job'), onConfigure: () => open('settings'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}
     {page === 'job' ? <JobPage onTailor={job => { setTailorOptions(null); setTailorJob(job); stop(); finish('tailor'); }} job={doc.job} onBack={() => navigate(null)} onSave={(job, next = null) => { stop(); changeDoc(d => ({ ...d, job, title: d.title === d.job.title + ' · 定向简历' ? job.title + ' · 定向简历' : d.title, resume: { ...d.resume, target: d.resume.target === d.job.title ? job.title : d.resume.target }, updatedAt: Date.now() })); finish(next); notify('目标岗位已更新'); }} /> : null}
-    {page === 'new' ? <NewDocumentPage onTailor={job => { setTailorOptions(null); setTailorJob(job); finish('tailor'); }} profile={state.profile} library={state.library} onBack={() => navigate(null)} onCreate={(job, projects, personalProfile) => { stop(); const next = makeDocument({ job, projects, profile: personalProfile || state.profile }); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); finish(null); setSelected(null); setFocus(false); setMobileView('chat'); notify('新简历已创建'); }} /> : null}
+    {page === 'new' ? <NewDocumentPage initialJob={tailorJob} onTailor={job => { setTailorOptions(null); setTailorJob(job); finish('tailor'); }} profile={state.profile} library={state.library} onBack={() => navigate('tailor')} onCreate={(job, projects, personalProfile) => { stop(); const next = makeDocument({ job, projects, profile: personalProfile || state.profile }); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); finish(null); setSelected(null); setFocus(false); setMobileView('chat'); notify('新简历已创建'); }} /> : null}
     {page === 'settings' ? <SettingsPage theme={theme} modelServiceAvailable={account?.health?.cloudEnabled !== false && (account?.health?.mode !== 'production' || workspace.cloud)} cloudAccount={workspace.cloud ? account.owner.id : null} state={state} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSave={settings => { stop(); setState(s => ({ ...s, settings })); finish(tailorOptions ? 'tailor' : null); notify('设置已保存'); }} notify={notify} onImport={importBackup} /> : null}
     {page === 'versions' ? <VersionsPage doc={doc} onBack={() => navigate(null)} onSave={saveVersion} onRestore={version => { stop(); changeDoc(d => ({ ...mutateResume(d, clone(version.resume), '恢复版本'), job: clone(version.job || d.job), versions: [...d.versions, { id: uid(), name: '恢复前自动保存', time: Date.now(), resume: clone(d.resume), job: clone(d.job) }] })); finish(null); setSelected(null); notify('已恢复版本，原草稿已另存'); }} /> : null}
     {page === 'review' ? <ReviewPage doc={doc} onBack={() => navigate(null)} onApply={apply} onLocate={locate} /> : null}
     {page === 'source' ? <SourcePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}
     {page === 'experience' ? <SelectedExperiencePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}
-    {page === 'tailor' ? <TailorPage example={sampleProfile} key={account.owner?.id || 'local'} job={tailorJob || currentDoc?.job} profile={hasProfile || (doc.example && !sampleProfile) ? state.profile : doc.resume} library={state.library} settings={{ ...state.settings, ...(workspace.cloud ? { cloudAccount: account.owner.id } : {}) }} onBack={() => navigate(null)} savedOptions={tailorOptions} sessionExpired={workspace.cloud && (saveState === 'expired' || !account.user)} onConfigure={(job, options) => visitFromTailor('settings', job, options)} onLibrary={(job, options) => visitFromTailor('library', job, options)} onReady={next => { stop(); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); setTailorJob(null); setTailorOptions(null); setSelected(null); setDesignOpen(false); setMobileView('document'); finish('export'); notify('已生成独立草稿，请核对纸面效果与事实依据'); }} /> : null}
-    {page === 'export' ? <DeliveryExportPage doc={doc} onBack={() => navigate(null)} onTailor={() => open('tailor')} notify={notify} /> : null}
+    {page === 'tailor' ? <TailorPage example={sampleProfile} key={(account.owner?.id || 'local') + ':' + tailorInstance} job={tailorJob || currentDoc?.job} profile={hasProfile || (doc.example && !sampleProfile) ? state.profile : doc.resume} library={state.library} settings={{ ...state.settings, ...(workspace.cloud ? { cloudAccount: account.owner.id } : {}) }} onBack={() => navigate(tailorReturn)} onManual={(job, options) => visitFromTailor('new', job, options)} savedOptions={tailorOptions} defaultAvailability={reviewValue(state.profile, '@availability')} onRememberAvailability={hasProfile || !profileHasContent(doc.resume) ? rememberAvailability : undefined} sessionExpired={workspace.cloud && (saveState === 'expired' || !account.user)} onConfigure={(job, options) => visitFromTailor('settings', job, options)} onLibrary={(job, options) => visitFromTailor('library', job, options)} onReady={next => { stop(); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); setTailorJob(null); setTailorOptions(null); setSelected(null); setDesignOpen(false); setMobileView('document'); finish('export'); notify('已生成独立草稿，请核对纸面效果与事实依据'); }} /> : null}
+    {page === 'export' ? <DeliveryExportPage key={doc.id} doc={doc} onSave={saveReviewedResume} onUndo={() => changeDoc(d => undoDocument(d))} onBack={() => navigate(null)} onTailor={() => open('tailor')} notify={notify} /> : null}
     {page === 'rename' ? <RenamePage key={doc.id} doc={doc} onBack={() => navigate(null)} onSave={title => { changeDoc(d => ({ ...d, title })); finish(null); }} /> : null}
       </div>
       </div>

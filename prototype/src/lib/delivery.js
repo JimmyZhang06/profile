@@ -481,96 +481,104 @@ export function finalizeDelivery(doc) {
   };
 }
 
-// Fit only new generated drafts. Original records and manually edited resumes
-// are never shortened by these automatic steps, and font size has a hard floor.
-export function nextDeliveryFit(doc) {
-  const steps = doc.delivery.layoutSteps || [],
-    r = doc.resume;
+// One change per measurement. A compact expression belongs only to its original
+// generated text; applying a fit after a manual edit must preserve that edit.
+export function nextPageAdjustment(r, changes = [], steps = []) {
   if (!steps.includes("compact")) {
     let next = r;
-    for (const c of doc.delivery.changes)
-      if (c.compact && c.compact.length < c.text.length)
+    const records = recordSections.flatMap(({ key }) => visibleRecords(r, key));
+    const visible = new Set([...r.projectIds, ...records.map((entry) => entry.id)]);
+    for (const c of changes)
+      if (c.compact && c.compact.length < c.text.length && fieldValue(r, c.field) === c.text && !r.textStyles?.[c.field]?.marks?.length &&
+          (!c.field.includes(":") || visible.has(c.field.split(":")[0])))
         next = setField(next, c.field, c.compact);
-    return {
-      ...doc,
-      resume: next,
-      delivery: { ...doc.delivery, layoutSteps: [...steps, "compact"] },
-    };
+    if (next !== r) return {resume: next, step: "compact"};
   }
-  if (!steps.includes("spacing"))
-    return {
-      ...doc,
-      resume: {
-        ...r,
-        design: {
-          ...r.design,
-          lineHeight: 1.4,
-          paragraphGap: 3,
-          sectionGap: 12,
-          margin: 14,
-        },
-      },
-      delivery: { ...doc.delivery, layoutSteps: [...steps, "spacing"] },
+  const design = getResumeDesign(r);
+  if (!steps.includes("spacing")) {
+    const adjusted = {
+      ...design, lineHeight: Math.min(design.lineHeight, 1.4),
+      paragraphGap: Math.min(design.paragraphGap, 3), sectionGap: Math.min(design.sectionGap, 12),
+      margin: Math.max(12, Math.min(design.margin, 14)),
     };
-  if (!steps.includes("type"))
-    return {
-      ...doc,
-      resume: { ...r, design: { ...r.design, fontSize: 10.5 } },
-      delivery: { ...doc.delivery, layoutSteps: [...steps, "type"] },
-    };
+    if (Object.keys(adjusted).some((key) => adjusted[key] !== design[key]))
+      return {resume: {...r, design: adjusted}, step: "spacing"};
+  }
+  if (!steps.includes("type") && design.fontSize !== 10.5)
+    return {resume: {...r, design: {...design, fontSize: 10.5}}, step: "type"};
   return null;
 }
 
-export function deliveryIssues(resume, measurement, job) {
+export function nextDeliveryFit(doc) {
+  const steps = doc.delivery.layoutSteps || [];
+  const adjustment = nextPageAdjustment(doc.resume, doc.delivery.changes, steps);
+  return adjustment && {...doc, resume: adjustment.resume, delivery: {...doc.delivery, layoutSteps: [...steps, adjustment.step]}};
+}
+
+export function deliveryChecks(resume, measurement, job) {
   const issues = [],
     design = getResumeDesign(resume);
-  if (!resume.name?.trim()) issues.push("请填写姓名");
+  const add = (target, message) => issues.push({target, message});
+  if (!resume.name?.trim()) add("name", "请填写姓名");
   const contacts = Array.isArray(resume.contactItems)
     ? visibleContacts(resume)
         .map((c) => c.value)
         .join(" ")
     : resume.contact || "";
-  if (!/[^\s@]+@[^\s@]+\.[^\s@]+|\+?\d[\d ()-]{6,}\d/.test(contacts))
-    issues.push("请填写可联系的邮箱或电话");
+  const contactCandidates = visibleContacts(normalizeProfile({contact: resume.contact || '', contactItems: resume.contactItems}))
+    .filter((item) => ['email', 'phone', 'other'].includes(item.type));
+  if (!contactCandidates.some(({value}) => {
+    if (/[^\s@]+@[^\s@]+\.[^\s@]+/.test(value)) return true;
+    const withoutDates = value.replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, '');
+    return /\+?\d[\d ()-]{5,}\d/.test(withoutDates) && withoutDates.replace(/\D/g, '').length >= 7;
+  }))
+    add("@email", "请填写可联系的邮箱或电话");
   if (
     !visibleRecords(resume, "educationEntries").length &&
     !resume.school?.trim()
   )
-    issues.push("教育背景尚未填写");
+    add("@school", "教育背景尚未填写");
   if (
     !resume.projectIds.length &&
     !visibleRecords(resume, "workEntries").length &&
     !visibleRecords(resume, "researchEntries").length &&
     !resume.experience?.trim()
   )
-    issues.push("还没有可展示的经历");
-  if (
-    resume.projectIds.some(
+    add("experiences", "还没有可展示的经历");
+  const emptyProject = resume.projectIds.find(
       (id) =>
         !(
           resume.projectBullets?.[id] ||
           resume.sources.find((p) => p.id === id)?.facts ||
           []
         ).some((_, index) => fieldValue(resume, id + ":" + index).trim()),
-    )
-  )
-    issues.push("部分项目尚未填写职责与成果");
+    );
+  if (emptyProject) add(emptyProject + ":0", "部分项目尚未填写职责与成果");
+  for (const key of ["workEntries", "researchEntries"])
+    for (const entry of visibleRecords(resume, key))
+      if (!entry.description.trim()) add(entry.id + ":description", (entry.organization || entry.title || "这段经历") + "还缺少具体行动或成果");
   if (design.fontSize < 10.5)
-    issues.push("正文小于推荐的 10.5 pt，请检查阅读效果");
-  if (design.margin < 12) issues.push("页边距过小，请检查打印边缘");
+    add("layout", "正文小于推荐的 10.5 pt，请检查阅读效果");
+  if (design.margin < 12) add("layout", "页边距过小，请检查打印边缘");
   if (measurement?.overflow)
-    issues.push("正文超出一页，请精简低相关内容或调整排版");
-  if (measurement?.horizontal) issues.push("存在超出纸面宽度的内容");
+    add("fit", "正文超出一页，请精简低相关内容或调整排版");
+  if (measurement?.horizontal) add("layout", "存在超出纸面宽度的内容");
   const instructions = job?.text || "";
   const header = [contacts, resume.summary].filter(Boolean).join(" ");
   if (/毕业年份|毕业时间|毕业年限/.test(instructions)) {
     const education = [...visibleRecords(resume, "educationEntries").map((e) => e.period), resume.educationPeriod].join(" ");
     if (!/20\d{2}\s*(?:届|年毕业)/.test(header) && !/[-—–~至]\s*20\d{2}/.test(education))
-      issues.push("JD 要求毕业年份，请在教育经历或页首注明");
+      add("@availability", "JD 要求毕业年份，请在教育经历或页首注明");
   }
   if (/到岗时间|最早到岗|可到岗日期/.test(instructions) &&
-      !/(?:到岗|入职|ASAP)/i.test(header)) issues.push("JD 要求到岗时间，请在页首填写");
+      !/(?:到岗|入职|ASAP)/i.test(header)) add("@availability", "JD 要求到岗时间，请在页首填写");
   if (/实习时长|可实习多久|可实习时间/.test(instructions) &&
-      !/\d+\s*个?月|[一二三四五六七八九十半两]+个?月/.test(header)) issues.push("JD 要求可实习时长，请在页首注明可持续几个月");
+      !/\d+\s*个?月|[一二三四五六七八九十半两]+个?月/.test(header)) add("@availability", "JD 要求可实习时长，请在页首注明可持续几个月");
+  if (/每周.{0,8}(天|到岗|出勤)|周出勤/.test(instructions) &&
+      !/(?:每周|一周|周出勤|周到岗)\s*(?:可)?\s*(?:实习|到岗|出勤)?\s*[1-7一二三四五六七两](?:\s*[-–至]\s*[1-7一二三四五六七两])?\s*天|[1-7一二三四五六七两]\s*天\s*[/／每]\s*周/.test(header))
+    add("@availability", "JD 要求每周出勤天数，请在页首注明");
   return issues;
+}
+export function deliveryIssues(resume, measurement, job) {
+  return deliveryChecks(resume, measurement, job).map((issue) => issue.message);
 }
