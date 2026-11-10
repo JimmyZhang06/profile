@@ -13,7 +13,7 @@ import {
 import { readModelDomains } from "./model-domains.mjs";
 import { restrictMaterialContext } from "../../src/lib/materialScope.js";
 import { systemPrompt } from "../ai.mjs";
-import { deliveryPrompt } from "../delivery-prompt.mjs";
+import { deliveryMessages } from "../delivery-prompt.mjs";
 
 export function safeConnection(row) {
   return {
@@ -116,7 +116,13 @@ export async function saveConnection(
 }
 const adapters = new Map();
 export function registerCloudAdapter(name, adapter) {
+  const previous = adapters.get(name);
   adapters.set(name, adapter);
+  return () => {
+    if (adapters.get(name) !== adapter) return;
+    if (previous) adapters.set(name, previous);
+    else adapters.delete(name);
+  };
 }
 registerCloudAdapter(
   "compatible",
@@ -240,10 +246,12 @@ export async function streamModel(
       connection.data.baseUrl,
       allowedHosts,
     );
+    const delivery = ["delivery", "delivery-selection"].includes(body.purpose);
     const messages = testing
       ? [{ role: "user", content: "Reply with OK." }]
+      : delivery ? deliveryMessages(body, context)
       : [
-          { role: "system", content: body.purpose === "delivery" ? deliveryPrompt : systemPrompt },
+          { role: "system", content: systemPrompt },
           {
             role: "user",
             content: "以下是当前资料：\n" + JSON.stringify(context),

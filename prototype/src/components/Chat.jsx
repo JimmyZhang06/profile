@@ -48,7 +48,7 @@ export function Chat({ doc, settings, selected, busy, focusKey, onSend, onStop, 
           <p>说说你想突出什么。我们可以从挑选经历，或修改一段表达开始。</p>
           <div>
             <button disabled={!enabled || busy} onClick={() => send('检查这份简历的完整度')}><IconFileText size={18} /><span>看看还可以补充什么</span><IconArrowUpRight size={16} /></button>
-            <button disabled={!enabled || busy} onClick={() => send('根据 JD 推荐最相关的项目')}><IconBooks size={18} /><span>挑选更适合岗位的经历</span><IconArrowUpRight size={16} /></button>
+            <button disabled={busy} onClick={() => onOpen('tailor')}><IconBooks size={18} /><span>从资料库按 JD 生成简历</span><IconArrowUpRight size={16} /></button>
           </div>
         </div> : null}
         {doc.messages.map(message => <Message key={message.id} message={message} doc={doc}

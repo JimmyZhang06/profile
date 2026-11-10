@@ -2,7 +2,8 @@ import { assistantFieldIds, fieldValue, fieldLabel, validateSuggestions } from '
 import { visibleRecords } from './profile.js';
 import { getProjectBullets, keywordMatches, projectDetails, projectSearchText } from './projects.js';
 import { restrictMaterialContext, validateMaterialApproval } from './materialScope.js';
-import { localDelivery, parseDelivery } from './delivery.js';
+import { localDelivery, parseDelivery, readDeliveryResult } from './delivery.js';
+import { restoreDeliveryIds, screeningBatches, shortlistedContext, validateShortlist } from './deliverySelection.js';
 
 export const modelName = (settings, capability = 'rewrite') => settings.bindings[capability] === 'offline' ? '本地整理' : settings.connections.find(c => c.id === settings.bindings[capability])?.name || '选择模型';
 export async function api(path, payload, signal, ownerId) {
@@ -31,7 +32,13 @@ export function buildAssistantContext(doc, selected, materialApproval = null, co
       source.details = Object.fromEntries((materialApproval.scopes[source.id] || []).filter(key => details[key]).map(key => [key, details[key]]));
     }
   }
-  return restrictMaterialContext({ job: doc.job, fields, selected, sources }, materialApproval, connection);
+  const resume = doc.resume;
+  const headerPresent = {
+    name: !!resume.name?.trim(), contact: !!resume.contact?.trim(),
+    workIdentity: !!resume.company?.trim() || visibleRecords(resume, 'workEntries').some((e) => e.organization || e.title),
+    workDates: !!resume.period?.trim() || visibleRecords(resume, 'workEntries').some((e) => e.period),
+  };
+  return restrictMaterialContext({ job: doc.job, fields, selected, sources, headerPresent }, materialApproval, connection);
 }
 export function parseAnswer(raw, doc) {
   const match = raw.match(/<changes>([\s\S]*?)<\/changes>/);
@@ -67,8 +74,9 @@ const adapters = new Map();
 export function registerAdapter(name, adapter) { adapters.set(name, adapter); }
 registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, settings, materialApproval, signal, onText, purpose, prepared }) => {
   const connection = settings.connections.find(item => item.id === connectionId);
-  const context = purpose === 'delivery' ? restrictMaterialContext(prepared.context, materialApproval, connection) : buildAssistantContext(doc, selected, materialApproval, connection);
-  const response = await fetch(settings.cloudAccount ? '/api/cloud/chat' : '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Luli-Client': 'workspace', ...(settings.cloudAccount ? { 'X-Luli-Account': settings.cloudAccount } : {}) }, signal, body: JSON.stringify({ connectionId, prompt, context, ...(purpose ? { purpose } : {}), ...(materialApproval ? { materialApproval } : {}), history: purpose === 'delivery' ? [] : doc.messages.filter(m => m.status === 'done' && !m.kind && !m.materialOptimization).map(m => ({ role: m.role, content: m.text })) }) });
+  const delivery = purpose === 'delivery' || purpose === 'delivery-selection';
+  const context = delivery ? restrictMaterialContext(prepared.context, materialApproval, connection) : buildAssistantContext(doc, selected, materialApproval, connection);
+  const response = await fetch(settings.cloudAccount ? '/api/cloud/chat' : '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Luli-Client': 'workspace', ...(settings.cloudAccount ? { 'X-Luli-Account': settings.cloudAccount } : {}) }, signal, body: JSON.stringify({ connectionId, prompt, context, ...(delivery ? { purpose, deliveryFormat: 'short-ids' } : {}), ...(materialApproval ? { materialApproval } : {}), history: delivery ? [] : doc.messages.filter(m => m.status === 'done' && !m.kind && !m.materialOptimization).map(m => ({ role: m.role, content: m.text })) }) });
   if (!response.ok) { const error = await response.json(); throw new Error(error.error || '模型暂时不可用'); }
   const reader = response.body.getReader(), decoder = new TextDecoder();
   let buffer = '', raw = '', ended = false;
@@ -87,12 +95,15 @@ registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, sett
         if (chunk.choices?.some(choice => choice.finish_reason === 'length')) throw new Error('模型输出已达到长度上限，结果尚未完成，未修改简历。请在模型设置中提高单次输出上限，或减少本次候选材料后重试。');
         raw += chunk.choices?.[0]?.delta?.content || '';
         if (raw.length > 200_000) throw new Error('模型返回内容过长，已停止生成。');
-        onText?.(raw.split(purpose === 'delivery' ? '<resume>' : '<changes>')[0].replace(/<[^>]*$/, '').trim());
+        if (!delivery) onText?.(raw.split('<changes>')[0].replace(/<[^>]*$/, '').trim());
       }
       if (done) break;
     }
     if (!ended || !raw.trim()) throw new Error('连接中断，回答未完成。请重试。');
-    return purpose === 'delivery' ? parseDelivery(raw, prepared) : parseAnswer(raw, doc);
+    if (!delivery) return parseAnswer(raw, doc);
+    const selecting = purpose === 'delivery-selection';
+    const plan = restoreDeliveryIds(readDeliveryResult(raw, selecting ? 'selection' : 'resume'), context);
+    return selecting ? validateShortlist(plan, context) : parseDelivery(plan, prepared);
   } finally { reader.releaseLock(); }
 });
 export async function runAssistant(input) {
@@ -104,8 +115,21 @@ export async function runAssistant(input) {
 }
 export async function runDelivery(input) {
   if (input.signal.aborted) throw new DOMException('已停止', 'AbortError');
-  const connectionId = input.settings.bindings.rewrite;
+  const connectionId = input.connectionId ?? input.settings.bindings.rewrite;
   if (connectionId === 'offline') return localDelivery(input.prepared);
   if (!input.settings.enabled || !input.settings.capabilities.rewrite) throw new Error('请先在设置中开启 AI 改写，或切换到本地整理。');
-  return adapters.get('compatible')({ ...input, connectionId, purpose: 'delivery', prompt: '请依据本次 JD 和已确认资料制作一份简洁、可核对的整份投递草稿。' });
+  const adapter = adapters.get('compatible');
+  const { context } = input.prepared;
+  const batches = screeningBatches(context), selected = [];
+  for (const [index, batch] of batches.entries()) {
+    input.signal.throwIfAborted();
+    input.onText?.(batches.length === 1 ? '正在比较全部候选经历与 JD…' : `正在比较第 ${index + 1} / ${batches.length} 批候选经历…`);
+    selected.push(...await adapter({ ...input, prepared: { ...input.prepared, context: batch }, connectionId, purpose: 'delivery-selection' }));
+  }
+  input.signal.throwIfAborted();
+  const writing = batches.length ? shortlistedContext(context, selected) : context;
+  input.onText?.('正在根据入选经历改写正文，并核对 JD 与原文依据…');
+  const plan = await adapter({ ...input, prepared: { ...input.prepared, context: writing }, connectionId, purpose: 'delivery' });
+  const connection = input.settings.connections.find((item) => item.id === connectionId);
+  return { ...plan, modelLabel: [connection.name, connection.model].filter(Boolean).join(' · ') };
 }

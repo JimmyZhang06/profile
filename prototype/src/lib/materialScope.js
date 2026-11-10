@@ -29,5 +29,9 @@ export function restrictMaterialContext(context = {}, approval, connection) {
     }
     return base;
   });
-  return { job: context.job, fields: context.fields, selected: context.selected, sources };
+  const safe = { job: context.job, fields: context.fields, selected: context.selected, sources };
+  if (context.headerPresent) safe.headerPresent = Object.fromEntries(
+    ['name', 'contact', 'workIdentity', 'workDates'].map((key) => [key, context.headerPresent[key] === true]),
+  );
+  return safe;
 }

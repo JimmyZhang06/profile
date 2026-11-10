@@ -17,6 +17,9 @@ import { selectImport } from "../src/lib/cloudWorkspace.js";
 import { getResumeDesign, releaseDesign } from "../src/lib/resumeDesign.js";
 import { activeDocument, moveDocumentToTrash, restoreDocument } from '../src/lib/documents.js';
 import { avatarFixture } from './fixtures/avatar.mjs';
+import { prepareDelivery, assembleDelivery } from '../src/lib/delivery.js';
+import { runDelivery } from '../src/lib/assistant.js';
+import { projects as deliveryProjects, profile as deliveryProfile } from './fixtures/delivery.mjs';
 
 test("account, workspace and administration enforce real session and ownership boundaries", async (t) => {
   const mailbox = new Map();
@@ -571,6 +574,71 @@ test("account, workspace and administration enforce real session and ownership b
       assert.ok(!JSON.stringify(usage).includes("fixture provider error"));
     },
   );
+  await t.test("two JDs screen the full archive and persist different evidence-backed resumes through authenticated cloud routes", async () => {
+    const library = [
+      ...deliveryProjects,
+      { id: "late-audio", name: "语音建模", role: "实验设计", date: "", tags: [], facts: ["按家庭分组设计交叉验证，隔离训练与评估数据。"] },
+    ];
+    const connection = (await alice.request("cloud/connections")).data.connections.find((c) => c.id === modelId);
+    const settings = { cloudAccount: aliceUser.id, enabled: true, capabilities: { rewrite: true },
+      bindings: { rewrite: "offline" }, connections: [connection] };
+    const scans = [], writes = [];
+    const restoreAdapter = registerCloudAdapter("compatible", async ({messages}) => {
+      assert.equal(messages.length, 3);
+      const context = JSON.parse(messages[1].content.split("\n").slice(1).join("\n"));
+      const selecting = !messages[0].content.includes("<resume>");
+      const machineLearning = context.job.title === "模型平台";
+      const chosen = context.sources.find((s) => s.name === (machineLearning ? "语音建模" : "校园内容计划"));
+      assert(chosen);
+      const ids = { projectIds: [chosen.id], workIds: [], researchIds: [] };
+      let result;
+      if (selecting) {
+        scans.push(context.sources.map((s) => s.name));
+        assert(context.fields.some((f) => f.kind === "workEntries" && f.label.includes("归档实习")));
+        result = JSON.stringify(ids);
+      } else {
+        writes.push(context.sources.map((s) => s.name));
+        const evidence = [{source: chosen.id + ":fact:0", quote: chosen.facts[0]}];
+        const text = machineLearning ? "将训练和评估数据按家庭分组，设计交叉验证。" : "围绕报名反馈复盘活动，并整理后续内容排期。";
+        result = "<resume>" + JSON.stringify({...ids, changes: [{field: chosen.id + ":0", text, evidence}],
+          requirements: [{requirement: context.job.text, evidence}], gaps: []}) + "</resume>";
+      }
+      return new Response("data: " + JSON.stringify({choices:[{delta:{content:result}}]}) + "\n\ndata: [DONE]\n\n",
+        {headers: {"Content-Type":"text/event-stream"}});
+    });
+    const nativeFetch = globalThis.fetch;
+    globalThis.fetch = (url, init) => url === "/api/cloud/chat"
+      ? nativeFetch(base + url, { ...init, headers: {...init.headers, Origin: config.origin,
+          Cookie: [...alice.cookies].map(([k,v]) => k + "=" + v).join("; ")} })
+      : nativeFetch(url, init);
+    try {
+      const original = (await alice.request("cloud/workspace")).data;
+      const documents = [];
+      for (const [title, text] of [["模型平台", "设计可复现的建模评估流程"], ["校园运营", "组织校园内容活动并完成复盘"]]) {
+        const job = { title, text, company: "测试" };
+        const profile = {...deliveryProfile, workEntries: [{id:"hidden", organization:"归档实习", title:"产品", period:"", description:"制定交付计划并核对需求。", visible:false}]};
+        const approval = { connectionId: modelId, baseUrl: connection.baseUrl, scopes: { atlas: ["actions"] } };
+        const prepared = prepareDelivery({ job, profile, projects: library, approval, connection });
+        const plan = await runDelivery({settings, connectionId: modelId, prepared, materialApproval: approval, signal: new AbortController().signal});
+        documents.push(assembleDelivery(prepared, plan));
+      }
+      assert.deepEqual(scans, [library.map((s) => s.name), library.map((s) => s.name)]);
+      assert.deepEqual(writes, [["语音建模"], ["校园内容计划"]]);
+      const saved = await alice.request("cloud/workspace", "PUT", {
+        state: {...original.state, documents: [...original.state.documents, ...documents], activeId: documents[1].id},
+        revision: original.revision, mutationId: "two-tailored-drafts",
+      });
+      assert.equal(saved.status, 200);
+      const restored = (await alice.request("cloud/workspace")).data.state;
+      assert.deepEqual(restored.documents.slice(-2).map((d) => d.resume.projectIds), [["late-audio"], ["campus"]]);
+      assert.deepEqual(restored.documents.slice(-2).map((d) => d.delivery.changes[0].evidence[0].source), ["late-audio:fact:0", "campus:fact:0"]);
+      assert.deepEqual(restored.documents.slice(0,-2), original.state.documents);
+      assert(validWorkspace(restored));
+    } finally {
+      globalThis.fetch = nativeFetch;
+      restoreAdapter();
+    }
+  });
   await t.test(
     "platform connections keep credentials private and enforce a shared quota across users",
     async () => {

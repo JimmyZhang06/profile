@@ -62,7 +62,8 @@ export function ChatComposer({ doc, settings, selected, busy, focusKey, active, 
           { label: '基础资料与经历', icon: <IconFileText size={18} />, onClick: () => onOpen('library') },
         ]} />
         <Menu label="快捷调整" className="quick-actions-menu opens-up" icon={<IconSparkles size={18} />} value="" items={
-          [selected ? '精简这段文字' : '精简个人简介', '推荐相关项目', '检查完整度'].map(text => ({ label: text, disabled: !enabled || busy, onClick: () => send(text) }))
+          [{ label: '按 JD 生成整份简历', description: '从资料库选材并改写', disabled: busy, onClick: () => onOpen('tailor') },
+            ...[selected ? '精简这段文字' : '精简个人简介', '检查完整度'].map(text => ({ label: text, disabled: !enabled || busy, onClick: () => send(text) }))]
         } />
         <Menu label="选择对话模型" className="model-menu opens-up" value={<span>{enabled ? modelName(settings) : '手工模式'}</span>} items={[
           { label: '本地整理', description: '精简、选材与完整度检查', selected: settings.bindings.rewrite === 'offline', onClick: () => onModel('offline') },

@@ -27,9 +27,9 @@ export function DeliveryExportPage({ doc, onBack, onTailor, notify }) {
   const issues = useMemo(
     () => [
       ...(doc.example ? ["当前含虚构示例，请替换为自己的真实资料后投递"] : []),
-      ...deliveryIssues(doc.resume, current),
+      ...deliveryIssues(doc.resume, current, doc.job),
     ],
-    [doc.resume, doc.example, current],
+    [doc.resume, doc.job, doc.example, current],
   );
   const pending = doc.messages.flatMap((m) =>
     (m.proposals || []).filter(
@@ -55,7 +55,7 @@ export function DeliveryExportPage({ doc, onBack, onTailor, notify }) {
   }
   return (
     <Page
-      title="投递前，最后看一遍。"
+      title="投递预览"
       description="这里按实际 A4 尺寸检查当前文稿。核对事实后，保存 PDF 即可投递。"
       className={"page-wide delivery-export-page delivery-view-" + mobileView}
       onBack={onBack}
@@ -70,7 +70,7 @@ export function DeliveryExportPage({ doc, onBack, onTailor, notify }) {
             onClick={print}
           >
             <IconPrinter size={17} />
-            保存为 PDF
+            {issues.length ? "保存草稿 PDF" : "保存为 PDF"}
           </Button>
           <Button
             className="delivery-mobile-print"
@@ -80,7 +80,7 @@ export function DeliveryExportPage({ doc, onBack, onTailor, notify }) {
             {verified ? (
               <>
                 <IconPrinter size={17} />
-                保存为 PDF
+                {issues.length ? "保存草稿 PDF" : "保存为 PDF"}
               </>
             ) : (
               <>
@@ -153,6 +153,14 @@ export function DeliveryExportPage({ doc, onBack, onTailor, notify }) {
                   ? "这份简历如何回应 JD"
                   : "本地选材结果"}
               </h2>
+              {doc.delivery.modelLabel ? <p className="quiet-note">生成来源 · {doc.delivery.modelLabel}</p> : null}
+              {doc.delivery.considered ? (
+                <p className="quiet-note">本次比较了 {doc.delivery.considered.projects} 个项目和 {doc.delivery.considered.work + doc.delivery.considered.research} 段实习或研究。正文收录{[
+                  ...doc.resume.workEntries.map((e) => e.organization || e.title),
+                  ...doc.resume.sources.map((p) => p.name),
+                  ...doc.resume.researchEntries.map((e) => e.organization || e.title),
+                ].filter(Boolean).join("、") || "的经历已移除"}。</p>
+              ) : null}
               {doc.revision > 0 ? (
                 <p className="quiet-note">
                   正文已编辑；以下是生成时的选材依据，请以当前内容为准。

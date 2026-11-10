@@ -15,7 +15,10 @@ export function validDelivery(value) {
   return (
     !!value &&
     ["local", "model"].includes(value.mode) &&
+    (value.modelLabel === undefined || typeof value.modelLabel === "string") &&
     Number.isFinite(value.createdAt) &&
+    (value.considered === undefined || (value.considered &&
+      ["projects", "work", "research"].every((k) => Number.isSafeInteger(value.considered[k]) && value.considered[k] >= 0))) &&
     strings(value.projectIds, 2) &&
     strings(value.workIds, 2) &&
     strings(value.researchIds, 1) &&

@@ -3,8 +3,8 @@ import { createNavigationGuard } from '../lib/navigation.js';
 
 export const PageNavigationContext = createContext(null);
 
-export function usePageNavigation() {
-  const [page, setPage] = useState(null), [pending, setPending] = useState(false);
+export function usePageNavigation(initialPage = null) {
+  const [page, setPage] = useState(initialPage), [pending, setPending] = useState(false);
   const [guard] = useState(createNavigationGuard);
   const registerDirty = useCallback(value => guard.setDirty(value), [guard]);
   const finish = useCallback(next => {
