@@ -20,11 +20,11 @@ function FormattedText({ text, marks }) {
     }) : <br />}</span>;
   });
 }
-function Editable({ field, label, resume, selected, onSelect, onEdit, onPick, as = 'p', className = '', placeholder = '点击填写', readOnly }) {
+function Editable({ field, label, resume, selected, writingField, onSelect, onEdit, onPick, as = 'p', className = '', placeholder = '点击填写', readOnly }) {
   const Tag = as, value = fieldValue(resume, field);
   if (readOnly && !value?.trim()) return null;
   const content = value ? <FormattedText text={value} marks={marksForField(resume, field, value)} /> : placeholder;
-  return <Tag className={'resume-editable ' + className + (selected === field && !readOnly ? ' selected' : '')} data-resume-field={field}>
+  return <Tag className={'resume-editable ' + className + (selected === field && !readOnly ? ' selected' : '')} data-resume-field={field} data-writing={writingField === field || undefined}>
     {readOnly ? <span className={'resume-field-text' + (!value ? ' field-placeholder' : '')}
       {...(onPick ? {role: 'button', tabIndex: 0, 'aria-label': '校改' + (label || fieldLabel(resume, field)),
         onClick: () => onPick(field), onKeyDown: (event) => {
@@ -44,8 +44,8 @@ function Records({ section, title, className, props }) {
     {entry.description ? <Editable {...props} field={entry.id + ':description'} /> : null}
   </div>)}</Section>;
 }
-export const ResumeDocument = forwardRef(function ResumeDocument({ resume: r, selected, onSelect, onEdit, onOpen, onPick, readOnly = false, style, className = '' }, ref) {
-  const design = getResumeDesign(r), props = { resume: r, selected, onSelect, onEdit, onPick, readOnly };
+export const ResumeDocument = forwardRef(function ResumeDocument({ resume: r, selected, writingField, onSelect, onEdit, onOpen, onPick, readOnly = false, style, className = '' }, ref) {
+  const design = getResumeDesign(r), props = { resume: r, selected, writingField, onSelect, onEdit, onPick, readOnly };
   const summary = (!readOnly || r.summary?.trim()) && <Section title="个人简介" className="resume-summary-section"><Editable {...props} field="summary" placeholder="写下你的工作背景与核心优势" /></Section>;
   const projects = (!readOnly || r.projectIds.length > 0) && <Section title="项目经历" className="resume-projects-section">
     {r.projectIds.map(id => { const p = r.sources.find(source => source.id === id); return p ? <div className="resume-project" key={id}>

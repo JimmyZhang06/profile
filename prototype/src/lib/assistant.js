@@ -4,6 +4,8 @@ import { getProjectBullets, keywordMatches, projectDetails, projectSearchText } 
 import { restrictMaterialContext, validateMaterialApproval } from './materialScope.js';
 import { localDelivery, parseDelivery, readDeliveryResult } from './delivery.js';
 import { restoreDeliveryIds, screeningBatches, shortlistedContext, validateShortlist } from './deliverySelection.js';
+import { deliveryFieldStream } from './deliveryStream.js';
+import { rewriteDirections, rewriteIssue, sameWording } from './revisionText.js';
 
 export const modelName = (settings, capability = 'rewrite') => settings.bindings[capability] === 'offline' ? '本地整理' : settings.connections.find(c => c.id === settings.bindings[capability])?.name || '选择模型';
 export async function api(path, payload, signal, ownerId) {
@@ -40,14 +42,21 @@ export function buildAssistantContext(doc, selected, materialApproval = null, co
   };
   return restrictMaterialContext({ job: doc.job, fields, selected, sources, headerPresent }, materialApproval, connection);
 }
-export function parseAnswer(raw, doc) {
+export function parseAnswer(raw, doc, editRequested = false) {
   const match = raw.match(/<changes>([\s\S]*?)<\/changes>/);
   let changes = [];
   if (match) { try { changes = JSON.parse(match[1]); } catch { throw new Error('建议格式不完整，未修改简历。请重试。'); } }
+  if (!Array.isArray(changes)) throw new Error('建议格式不完整，未修改简历。请重试。');
   if (raw.includes('<changes>') && !match) throw new Error('生成中断，建议未完成。请重试。');
   const proposals = validateSuggestions(changes, doc);
   let text = raw.split('<changes>')[0].trim();
-  if (changes.length && !proposals.length) text += '\n\n部分建议未通过字段或数字检查，已保留原文。';
+  if (changes.length && !proposals.length) {
+    text = changes.every((c) => typeof c?.after === 'string' && typeof c.field === 'string' && assistantFieldIds(doc.resume).includes(c.field) && sameWording(c.after,fieldValue(doc.resume,c.field)))
+      ? '这次返回的措辞与原文相同，没有可采用的改动。可以指出要突出的一项行动或结果。'
+      : '这次没有通过字段或事实检查的改写，简历已保留原文。';
+  } else if (editRequested && !proposals.length) {
+    text = '这次模型没有给出可采用的正文改写。请指出要删减的内容或希望突出的个人贡献。';
+  }
   return { text: text || '已整理修改建议，请核对后采用。', proposals };
 }
 async function localResult({ prompt, doc, selected, library }) {
@@ -72,14 +81,34 @@ async function localResult({ prompt, doc, selected, library }) {
 }
 const adapters = new Map();
 export function registerAdapter(name, adapter) { adapters.set(name, adapter); }
-registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, settings, materialApproval, signal, onText, purpose, prepared }) => {
+registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, settings, materialApproval, signal, onText, purpose, prepared, paperSpace, onField, direction, condense }) => {
   const connection = settings.connections.find(item => item.id === connectionId);
   const delivery = purpose === 'delivery' || purpose === 'delivery-selection';
-  const context = delivery ? restrictMaterialContext(prepared.context, materialApproval, connection) : buildAssistantContext(doc, selected, materialApproval, connection);
-  const response = await fetch(settings.cloudAccount ? '/api/cloud/chat' : '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Luli-Client': 'workspace', ...(settings.cloudAccount ? { 'X-Luli-Account': settings.cloudAccount } : {}) }, signal, body: JSON.stringify({ connectionId, prompt, context, ...(delivery ? { purpose, deliveryFormat: 'short-ids' } : {}), ...(materialApproval ? { materialApproval } : {}), history: delivery ? [] : doc.messages.filter(m => m.status === 'done' && !m.kind && !m.materialOptimization).map(m => ({ role: m.role, content: m.text })) }) });
+  const scoped = purpose === 'field-rewrite';
+  let context;
+  if (delivery) context = restrictMaterialContext(prepared.context, materialApproval, connection);
+  else if (scoped) context = {job:doc.job, selected, sources:[],
+    fields:[{id:selected, label:fieldLabel(doc.resume,selected), text:fieldValue(doc.resume,selected)}]};
+  else context = buildAssistantContext(doc, selected, materialApproval, connection);
+  const request = {connectionId, prompt, context, history:[]};
+  if (materialApproval) request.materialApproval = materialApproval;
+  if (delivery) {
+    request.purpose = purpose;
+    request.deliveryFormat = 'short-ids';
+    if (purpose === 'delivery' && paperSpace) request.paperSpace = {lines:paperSpace.lines, columns:paperSpace.columns};
+    if (condense) request.condense = true;
+  } else if (!scoped) {
+    request.history = doc.messages.filter(m => m.status === 'done' && !m.kind && !m.materialOptimization)
+      .map(m => ({role:m.role, content:m.text}));
+  }
+  const response = await fetch(settings.cloudAccount ? '/api/cloud/chat' : '/api/chat', {
+    method:'POST', signal, body:JSON.stringify(request),
+    headers:{'Content-Type':'application/json','X-Luli-Client':'workspace', ...(settings.cloudAccount ? {'X-Luli-Account':settings.cloudAccount} : {})},
+  });
   if (!response.ok) { const error = await response.json(); throw new Error(error.error || '模型暂时不可用'); }
   const reader = response.body.getReader(), decoder = new TextDecoder();
   let buffer = '', raw = '', ended = false;
+  const fieldStream = purpose === 'delivery' && onField ? deliveryFieldStream(prepared, onField) : null;
   try {
     while (true) {
       const { value, done } = await reader.read();
@@ -93,14 +122,24 @@ registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, sett
         let chunk; try { chunk = JSON.parse(payload); } catch { throw new Error('无法读取模型响应，请重试。'); }
         if (chunk.error) throw new Error('模型返回异常，请重试。');
         if (chunk.choices?.some(choice => choice.finish_reason === 'length')) throw new Error('模型输出已达到长度上限，结果尚未完成，未修改简历。请在模型设置中提高单次输出上限，或减少本次候选材料后重试。');
-        raw += chunk.choices?.[0]?.delta?.content || '';
+        const delta = chunk.choices?.[0]?.delta?.content || '';
+        raw += delta;
         if (raw.length > 200_000) throw new Error('模型返回内容过长，已停止生成。');
-        if (!delivery) onText?.(raw.split('<changes>')[0].replace(/<[^>]*$/, '').trim());
+        fieldStream?.(delta);
+        if (!delivery && !scoped) onText?.(raw.split('<changes>')[0].replace(/<[^>]*$/, '').trim());
       }
       if (done) break;
     }
     if (!ended || !raw.trim()) throw new Error('连接中断，回答未完成。请重试。');
-    if (!delivery) return parseAnswer(raw, doc);
+    if (!delivery) {
+      const answer = parseAnswer(raw, doc, /精简|改写|帮我改|优化.{0,10}(简历|表述|措辞)/.test(prompt));
+      if (!scoped) return answer;
+      const proposal = answer.proposals.find((p) => p.field === selected);
+      if (!proposal) throw new Error('模型没有给出这段正文的有效替换。请具体指出要突出或删减的内容。');
+      const issue = rewriteIssue(proposal.before, proposal.after, direction);
+      if (issue) throw new Error(issue);
+      return proposal;
+    }
     const selecting = purpose === 'delivery-selection';
     const plan = restoreDeliveryIds(readDeliveryResult(raw, selecting ? 'selection' : 'resume'), context);
     return selecting ? validateShortlist(plan, context) : parseDelivery(plan, prepared);
@@ -112,6 +151,17 @@ export async function runAssistant(input) {
   if (input.signal.aborted) throw new DOMException('已停止', 'AbortError');
   if (connectionId === 'offline') return { ...await localResult(input), offline: true };
   return adapters.get('compatible')({ ...input, connectionId });
+}
+export async function rewriteField(input) {
+  const {doc, selected, direction, instruction, settings, connectionId, signal} = input;
+  signal.throwIfAborted();
+  if (!settings.enabled || !settings.capabilities.rewrite || !settings.connections.some((c) => c.id === connectionId && c.enabled !== false))
+    throw new Error('请选择已启用的 AI 连接。');
+  if (!assistantFieldIds(doc.resume).includes(selected) || !fieldValue(doc.resume,selected).trim() || !Object.hasOwn(rewriteDirections,direction))
+    throw new Error('请先选择一段已有的简历正文。');
+  const prompt = ['只改写当前选中段落。方向为' + rewriteDirections[direction] + '。', instruction,
+    '仅用这段已有事实，保留归因、数字及单位。给出一条可直接替换的完整新文字并说明改了什么。精简时减少至少约 15%；突出贡献或结果时重组句子，把具体行动或交付前移。只调整标点、附加套话或复述原文都不能算修改。'].filter(Boolean).join('\n');
+  return adapters.get('compatible')({...input, purpose:'field-rewrite', prompt});
 }
 export async function runDelivery(input) {
   if (input.signal.aborted) throw new DOMException('已停止', 'AbortError');
@@ -131,5 +181,14 @@ export async function runDelivery(input) {
   input.onText?.('正在根据入选经历改写正文，并核对 JD 与原文依据…');
   const plan = await adapter({ ...input, prepared: { ...input.prepared, context: writing }, connectionId, purpose: 'delivery' });
   const connection = input.settings.connections.find((item) => item.id === connectionId);
-  return { ...plan, modelLabel: [connection.name, connection.model].filter(Boolean).join(' · ') };
+  return { ...plan, modelId:connection.id, modelLabel: [connection.name, connection.model].filter(Boolean).join(' · ') };
+}
+
+export async function refitDelivery(run, draft, paperSpace, overflowMm, signal) {
+  signal.throwIfAborted();
+  const selected = [...draft.delivery.projectIds,...draft.delivery.workIds,...draft.delivery.researchIds];
+  const context = shortlistedContext(run.prepared.context,selected);
+  const space = {...paperSpace, lines:Math.max(6,paperSpace.lines - Math.ceil(overflowMm / 5.5) - 2)};
+  const plan = await adapters.get('compatible')({...run, prepared:{...run.prepared,context}, paperSpace:space, condense:true, purpose:'delivery', signal});
+  return {...plan, modelId:draft.delivery.modelId, modelLabel:draft.delivery.modelLabel};
 }

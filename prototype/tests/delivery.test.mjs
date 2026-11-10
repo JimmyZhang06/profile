@@ -29,11 +29,128 @@ import {
   undoDocument,
 } from "../src/lib/workspace.js";
 import {requirementReview, reviewFields, reviewValue, setReviewValue, reviewExperiences, setReviewExperience} from "../src/lib/deliveryReview.js";
-import { runDelivery, runAssistant } from "../src/lib/assistant.js";
+import { parseAnswer, runDelivery, runAssistant, rewriteField, refitDelivery } from "../src/lib/assistant.js";
+import { deliveryFieldStream } from "../src/lib/deliveryStream.js";
+import { composePage, paperOutline, writingPaper } from "../src/lib/deliveryComposition.js";
+import { pageWritingBudget } from "../src/lib/deliverySpace.js";
+import { deliveryMessages } from "../server/delivery-prompt.mjs";
+import { changedSpan, rewriteIssue } from "../src/lib/revisionText.js";
 import { chatDeliveryJob, jobFromListing, jobFromFragment, screeningBatches, restoreDeliveryIds, deliveryModelContext, shortlistedContext } from "../src/lib/deliverySelection.js";
 
 const prepare = (approval) =>
   prepareDelivery({ job, profile, projects, approval, connection });
+test("physical space changes the writer's line and section budgets without transmitting the private header", () => {
+  const {context, seed} = prepare();
+  const small = pageWritingBudget({lines:17,columns:42},context);
+  const large = pageWritingBudget({lines:43,columns:42},context);
+  assert(small.bodyLines < large.bodyLines && small.perWork < large.perWork);
+  const messages = deliveryMessages({deliveryFormat:'short-ids', paperSpace:{lines:17,columns:42, extra:profile.contact}},context);
+  assert.match(messages.at(-1).content, /约剩 17 行/);
+  assert(!JSON.stringify(messages).includes(profile.contact));
+  const outline = paperOutline(seed.resume);
+  assert.equal(outline.contact,seed.resume.contact);
+  assert.deepEqual(outline.projectIds,[]);
+  assert.equal(outline.educationEntries[0].organization,profile.school);
+  assert.equal(outline.workEntries.length,0);
+  assert.equal(outline.educationEntries[0].description,'');
+});
+test("streaming reveals only complete, evidenced field objects ahead of the final JSON, including split quotes and braces", () => {
+  const p = prepare(), collected = [];
+  const receive = deliveryFieldStream(p,c => collected.push(c));
+  const value = structuredClone(plan);
+  value.changes[0].text = '整理“访谈”信息，使用 {"需求"} 清单。';
+  const content = '<resume>' + JSON.stringify(value);
+  const boundary = content.indexOf(',"requirements"');
+  for (const ch of content.slice(0,boundary)) receive(ch);
+  assert.deepEqual(collected.map((c) => c.field),plan.changes.map((c) => c.field));
+  assert.equal(collected[0].text,value.changes[0].text);
+  assert.throws(() => parseDelivery(content.slice(0,boundary),p));
+  for (const ch of content.slice(boundary)+'</resume>') receive(ch);
+  assert.equal(parseDelivery(content+'</resume>',p).changes.length,collected.length);
+  const bad = structuredClone(plan); bad.changes[1].text = '增长 98765%';
+  const only = []; deliveryFieldStream(p,c=>only.push(c))('<resume>'+JSON.stringify(bad)+'</resume>');
+  assert.deepEqual(only.map((c) => c.field),['summary']);
+  assert.throws(() => parseDelivery(bad,p),/数字/);
+  const partial = writingPaper(paperOutline(p.seed.resume),p.seed.resume,[collected[3]],5);
+  assert.equal(fieldValue(partial,'atlas:0'),collected[3].text.slice(0,5));
+  assert.deepEqual(partial.projectIds,['atlas']);
+  assert.equal(fieldValue(partial,'summary'),'');
+});
+test("composition adds an evidenced detail when there is room, measures it, and reverses it if it crowds the page", () => {
+  const p = prepare(), value = structuredClone(plan);
+  const lead = value.changes.find((c)=>c.field==='atlas:0');
+  lead.evidence.push({source:'atlas:fact:1',quote:projects[0].facts[1]});
+  lead.expanded = lead.text + projects[0].facts[1];
+  const draft = assembleDelivery(p,parseDelivery(value,p));
+  const first = composePage(draft,{heightMm:210,overflow:false,horizontal:false},{tried:[]});
+  assert.equal(fieldValue(first.doc.resume,lead.field),lead.expanded);
+  const rollback = composePage(first.doc,{heightMm:295,overflow:false,horizontal:false},first.pass);
+  assert.equal(rollback.doc.resume,draft.resume);
+  assert.equal(composePage(rollback.doc,{heightMm:240,overflow:false,horizontal:false},rollback.pass),null);
+  const reduced = composePage(draft,{heightMm:300,overflow:true,overflowMm:3,horizontal:false},{tried:[]});
+  const changed = plan.changes.filter((c)=>fieldValue(reduced.doc.resume,c.field)!==fieldValue(draft.resume,c.field));
+  assert.equal(changed.length,1);
+  assert.equal(reduced.doc.resume.design.fontSize,11);
+  lead.expanded = lead.text + '提升 500% 的营收。';
+  assert.equal(parseDelivery(value,p).changes.find((c)=>c.field===lead.field).expanded,undefined);
+});
+test("unused JD evidence can supply one complete project fact while preserving attribution and the raw archive", () => {
+  const extra='根据访谈记录整理内容权限与审核节点，交付一份可供逐项复测的需求清单。';
+  const sources=structuredClone(projects); sources[0].facts.push(extra);
+  const p=prepareDelivery({job,profile,projects:sources,connection});
+  const answer=structuredClone(plan);
+  answer.requirements[0].evidence.push({source:'atlas:fact:2',quote:extra});
+  const draft=assembleDelivery(p,parseDelivery(answer,p));
+  const next=composePage(draft,{heightMm:230,overflow:false,horizontal:false},{tried:[]});
+  assert.equal(fieldValue(next.doc.resume,'atlas:2'),extra);
+  assert.equal(next.doc.delivery.changes.at(-1).evidence[0].source,'atlas:fact:2');
+  const revert=composePage(next.doc,{heightMm:290,overflow:false,horizontal:false},next.pass);
+  assert.deepEqual(revert.doc,draft);
+  assert.equal(composePage(revert.doc,{heightMm:230,overflow:false,horizontal:false},revert.pass),null);
+  assert.deepEqual(p.seed.resume.sources,sources);
+});
+test("a scoped revision sends only the selected paragraph, rejects cosmetic edits and can change the paper", async () => {
+  const p = prepare(), doc = assembleDelivery(p,parseDelivery(plan,p)), original = globalThis.fetch;
+  const settings = {enabled:true,capabilities:{rewrite:true},connections:[connection],bindings:{rewrite:connection.id}};
+  const before = doc.resume.summary, after = '整理需求并验证方案。';
+  let returned = before;
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    assert.deepEqual(body.history,[]); assert.deepEqual(body.context.sources,[]);
+    assert.deepEqual(body.context.fields.map((f)=>f.id),['summary']);
+    assert(!JSON.stringify(body).includes(profile.contact));
+    const content = '<changes>'+JSON.stringify([{field:'summary',after:returned,reason:'合并重复的能力表述。'}])+'</changes>';
+    return new Response('data: '+JSON.stringify({choices:[{delta:{content}}]})+'\n\ndata: [DONE]\n\n');
+  };
+  const run = () => rewriteField({doc,selected:'summary',settings,connectionId:connection.id,
+    direction:'shorter',instruction:'',signal:new AbortController().signal});
+  try {
+    await assert.rejects(run(),/有效替换/);
+    returned=after; const result=await run();
+    assert.equal(setField(doc.resume,result.field,result.after).summary,after); assert.equal(doc.resume.summary,before);
+    assert.deepEqual(changedSpan('整理材料','整理需求').after,{lead:'整理',edit:'需求',end:''});
+    assert(rewriteIssue('转化率 5%','推广覆盖 5 万人','outcome'));
+    assert(rewriteIssue('分析岗位和需求','分析岗位与需求','shorter'));
+    assert(!parseAnswer('已优化<changes>'+JSON.stringify([{field:'summary',after:before+'！'}])+'</changes>',doc).text.includes('已优化'));
+  } finally {globalThis.fetch=original;}
+});
+test("exceptional shortening reuses only selected materials in one writing call with a smaller measured budget", async () => {
+  const p = prepare(), value = structuredClone(plan);
+  value.projectIds=['atlas']; value.changes=value.changes.filter((c)=>c.field!=='campus:0');
+  const draft=assembleDelivery(p,parseDelivery(value,p));
+  const original=globalThis.fetch, calls=[];
+  globalThis.fetch=async (_url,opts) => {
+    const body=JSON.parse(opts.body); calls.push(body);
+    const content='<resume>'+JSON.stringify(value)+'</resume>';
+    return new Response('data: '+JSON.stringify({choices:[{delta:{content}}]})+'\n\ndata: [DONE]\n\n');
+  };
+  try {
+    const input={prepared:p,connectionId:connection.id,settings:{connections:[connection]}};
+    const result=await refitDelivery(input,draft,{lines:38,columns:45},14,new AbortController().signal);
+    assert.equal(calls.length,1); assert(calls[0].condense); assert(calls[0].paperSpace.lines<38);
+    assert.deepEqual(calls[0].context.sources.map((s)=>s.id),['atlas']); assert.deepEqual(result.projectIds,['atlas']);
+  } finally {globalThis.fetch=original;}
+});
 test("in-product proofing preserves a manual rewrite, hidden sources, undo and the original archive", () => {
   const prepared = prepare(), doc = assembleDelivery(prepared, parseDelivery(plan, prepared));
   const source = structuredClone(doc.resume);

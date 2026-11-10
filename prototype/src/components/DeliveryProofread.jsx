@@ -5,12 +5,15 @@ import {SelectField} from './ui/SelectField.jsx';
 import {deliveryDesign} from '../lib/delivery.js';
 import {getResumeDesign} from '../lib/resumeDesign.js';
 import {reviewExperiences, reviewFields, reviewValue, setReviewExperience, setReviewValue} from '../lib/deliveryReview.js';
+import {assistantFieldIds} from '../lib/workspace.js';
+import {getProjectBullets} from '../lib/projects.js';
+import {DeliveryRewrite} from './DeliveryRewrite.jsx';
 
 function numberOptions(values, current, unit) {
   return [...new Set([...values, current])].sort((a,b) => a - b).map((n) => ({value:String(n), label:n + unit}));
 }
 
-export function DeliveryProofread({doc, resume, field, jump, busy, onField, onChange, onTailor, onError}) {
+export function DeliveryProofread({doc, resume, field, jump, busy, settings, onField, onChange, onTailor, onError}) {
   const editor = useRef(null), layout = useRef(null), experiences = useRef(null);
   const options = useMemo(() => reviewFields(resume), [resume]);
   const selected = options.find((o) => o.value === field || o.paperField === field || (field === '@school' && o.value === 'school')) || options.find((o) => o.value === 'summary');
@@ -18,6 +21,8 @@ export function DeliveryProofread({doc, resume, field, jump, busy, onField, onCh
   const proposal = doc.delivery?.changes.find((c) => c.field === selected.paperField);
   const entries = reviewExperiences(resume);
   const design = getResumeDesign(resume);
+  const projectId = selected.paperField?.split(':')[0];
+  const points = resume.projectIds.includes(projectId) ? getProjectBullets(resume,projectId) : null;
   useEffect(() => {
     if (!jump) return;
     if (jump.area === 'field') { editor.current?.focus(); return; }
@@ -35,15 +40,26 @@ export function DeliveryProofread({doc, resume, field, jump, busy, onField, onCh
       value={value} onChange={(e) => write(e.target.value)} placeholder={'填写' + selected.label} />
     <div className="delivery-field-meta">
       <span>{Array.from(value.trim()).length} 字</span>
+      {proposal && !value.trim() && <Button variant="ghost" onClick={() => write(proposal.text)}>恢复生成原文</Button>}
+      {proposal?.expanded && value !== proposal.expanded &&
+        <Button variant="ghost" onClick={() => write(proposal.expanded)}>使用补充细节版</Button>}
       {proposal?.compact && proposal.compact.length < proposal.text.length &&
         <Button variant="ghost" onClick={() => write(value === proposal.compact ? proposal.text : proposal.compact)}>
           {value === proposal.compact ? '恢复生成时的长版' : '使用精简措辞'}
         </Button>}
     </div>
+    {points && points.length > 0 && <Button variant="ghost" onClick={() => {
+      const empty = points.findIndex((_,i) => !reviewValue(resume,projectId+':'+i).trim());
+      if (empty < 0) onChange({...resume,projectBullets:{...resume.projectBullets,[projectId]:[...points,'']}});
+      onField(projectId+':'+(empty < 0 ? points.length : empty));
+      editor.current?.focus();
+    }}>补充一个项目要点</Button>}
     {proposal?.evidence.length > 0 && <details className="delivery-field-evidence">
       <summary>对照这段的原文依据</summary>
       {proposal.evidence.map((e, i) => <blockquote key={i}><small>{e.label}</small>{e.quote}</blockquote>)}
     </details>}
+    {settings && assistantFieldIds(resume).includes(selected.paperField) && <DeliveryRewrite key={selected.paperField}
+      doc={doc} resume={resume} selected={selected.paperField} value={value} settings={settings} onApply={write} />}
     <details ref={experiences} className="delivery-control-group">
       <summary>本稿展示的经历 <span>{entries.filter((item) => item.included).length} 项 <IconChevronDown size={14} /></span></summary>
       {entries.map((item) => <label className="delivery-experience" key={item.section + ':' + item.id}>

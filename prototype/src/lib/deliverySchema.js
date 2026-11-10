@@ -16,6 +16,7 @@ export function validDelivery(value) {
     !!value &&
     ["local", "model"].includes(value.mode) &&
     (value.modelLabel === undefined || typeof value.modelLabel === "string") &&
+    (value.modelId === undefined || typeof value.modelId === "string") &&
     Number.isFinite(value.createdAt) &&
     (value.considered === undefined || (value.considered &&
       ["projects", "work", "research"].every((k) => Number.isSafeInteger(value.considered[k]) && value.considered[k] >= 0))) &&
@@ -30,6 +31,7 @@ export function validDelivery(value) {
       (c) =>
         c &&
         ["field", "text", "compact"].every((k) => typeof c[k] === "string") &&
+        (c.expanded === undefined || typeof c.expanded === "string") &&
         evidence(c.evidence),
     ) &&
     Array.isArray(value.requirements) &&

@@ -15,6 +15,7 @@ function DeliveryEvidence({doc, onLocate}) {
   if (!plan) return null;
   const {resume} = doc;
   const visible = new Set(reviewFields(resume).map((option) => option.paperField));
+  const omitted = plan.changes.filter((c) => visible.has(c.field) && !fieldValue(resume,c.field).trim());
   const included = [
     ...visibleRecords(resume, 'workEntries').map((e) => e.organization || e.title),
     ...resume.projectIds.map((id) => resume.sources.find((p) => p.id === id)?.name),
@@ -25,6 +26,9 @@ function DeliveryEvidence({doc, onLocate}) {
     {plan.modelLabel && <p className="quiet-note">生成来源 · {plan.modelLabel}</p>}
     {plan.considered && <p className="quiet-note">比较了 {plan.considered.projects} 个项目和 {plan.considered.work + plan.considered.research} 段实习或研究。{included.length ? '当前收录' + included.join('、') + '。' : ''}</p>}
     {doc.revision > 0 && <p className="quiet-note">以下依据记录于生成时，请与当前正文核对。</p>}
+    {!!omitted.length && <details><summary>本稿略去的要点 · {omitted.length}</summary>
+      {omitted.map((c) => <section className="delivery-change" key={c.field}><h3>{fieldLabel(resume,c.field)}</h3><p>{c.text}</p>
+        <Button variant="ghost" onClick={() => onLocate(c.field)}>调整这段<IconArrowRight size={14} /></Button></section>)}</details>}
     {plan.requirements.map((item, i) => {
       const result = requirementReview(resume, plan, item, visible);
       return <details key={i}><summary>{item.requirement}<small className="delivery-proof-state">{result.label}</small></summary>
@@ -43,7 +47,7 @@ function DeliveryEvidence({doc, onLocate}) {
 
 const stepNames = {compact:'精简措辞', spacing:'收紧间距', type:'正文调整为 10.5 pt'};
 
-export function DeliveryExportPage({doc, onBack, onTailor, onSave, onUndo, notify}) {
+export function DeliveryExportPage({doc, settings, onBack, onTailor, onSave, onUndo, notify}) {
   const [step, setStep] = useState(2), [paperOnly, setPaperOnly] = useState(false);
   const [working, setWorking] = useState(null), [measurement, setMeasurement] = useState(null);
   const [field, setField] = useState('summary'), [jump, setJump] = useState(null);
@@ -148,7 +152,7 @@ export function DeliveryExportPage({doc, onBack, onTailor, onSave, onUndo, notif
           <div className="delivery-panel-title"><h2>调整当前投递稿</h2>
             {!!doc.undo.length && !working && <Button variant="ghost" disabled={busy} onClick={() => {onUndo(); setReviewed(null); setFeedback('已撤销上一次修改。');}}><IconArrowBackUp size={15} />撤销</Button>}
           </div>
-          <DeliveryProofread doc={doc} resume={resume} field={field} jump={jump} busy={busy} onField={setField}
+          <DeliveryProofread doc={doc} resume={resume} settings={settings} field={field} jump={jump} busy={busy} onField={setField}
             onChange={change} onTailor={onTailor} onError={setFeedback} />
           {(feedback || working || busy) && <p className="quiet-note delivery-feedback" role="status">{busy ? '正在按纸面高度重新测量…' : feedback || '正在预览本次调整，保存后写入当前简历。'}</p>}
         </> : <>

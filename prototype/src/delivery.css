@@ -1,6 +1,31 @@
 .tailor-page .page-content {
   max-width: 1000px;
 }
+.generation-page .page-content { max-width: 1090px; }
+.generation-layout { display:grid; grid-template-columns:minmax(176px,.33fr) minmax(0,1fr); gap:clamp(18px,4vw,46px); align-items:start; }
+.generation-progress { position:sticky; top:12px; min-width:0; }
+.generation-progress ol { list-style:none; margin:20px 0; padding:0; }
+.generation-progress li { display:flex; align-items:center; gap:9px; min-height:36px; color:var(--text-secondary); font-size:14px; }
+.generation-progress li span { display:grid; place-items:center; width:20px; height:20px; border-radius:50%; background:var(--surface-muted); font-size:11px; }
+.generation-progress li[aria-current] { color:var(--text-strong); font-weight:650; }
+.generation-progress li[aria-current] span { background:var(--action-bg); color:var(--action-fg); }
+.generation-progress p { line-height:1.65; font-size:14px; color:var(--text-secondary); overflow-wrap:anywhere; }
+.generation-manuscript { min-width:0; }
+.generation-paper-label { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:9px; font-size:12px; color:var(--text-secondary); }
+.generation-manuscript [data-writing] .resume-text-line:last-child::after { content:''; display:inline-block; height:.95em; width:1px; margin-left:1px; background:currentColor; vertical-align:-.08em; animation:writing-caret 1s step-end infinite; }
+@keyframes writing-caret { 50% { opacity:0; } }
+@media (prefers-reduced-motion:reduce) { .generation-manuscript [data-writing] .resume-text-line:last-child::after { display:none; } }
+@media (max-width:760px) {
+  .generation-layout { display:block; }
+  .generation-progress { position:static; }
+  .generation-progress ol { display:grid; grid-template-columns:repeat(4,1fr); gap:2px; margin:8px 0; }
+  .generation-progress li { font-size:12px; gap:4px; min-height:28px; }
+  .generation-progress p { margin:8px 0 16px; }
+  .generation-manuscript .generation-paper.resume-document { position:static; transform:none; box-sizing:border-box; width:100%; max-width:none; min-height:280px; padding:18px 15px 26px; margin:0; background:#fff; color:#202020; --text-strong:#111; --text-primary:#222; --text-secondary:#555; --border-strong:#777; --border-subtle:#ddd; border:1px solid var(--border); box-shadow:none; border-radius:4px; overflow-wrap:anywhere; }
+  .generation-page .page-action-group { flex-wrap:wrap; }
+  .generation-manuscript .generation-paper.template-compact .resume-intro { display:block; }
+  .generation-manuscript .generation-paper.template-compact .resume-target { text-align:left; margin-top:4px; }
+}
 .delivery-steps { margin: 0 0 24px; }
 .delivery-steps ol { list-style: none; display: flex; align-items: center; gap: 12px; margin: 0; padding: 0; }
 .delivery-steps li { display: flex; align-items: center; min-width: 0; gap: 12px; color: var(--border-strong); }
@@ -192,6 +217,17 @@
 .delivery-layout-options .select-field { flex: 1 1 95px; }
 .delivery-proofread .select-field-trigger { min-width: 0; }
 .delivery-feedback { margin-top: 12px; }
+.delivery-field-rewrite { border-top:1px solid var(--border); margin-top:8px; padding-bottom:5px; }
+.delivery-field-rewrite > summary { padding:12px 0; cursor:pointer; font-size:14px; font-weight:550; }
+.delivery-rewrite-pickers { display:flex; flex-wrap:wrap; align-items:end; gap:8px; }
+.delivery-rewrite-pickers .select-field { min-width:0; flex:1 1 130px; }
+.delivery-rewrite-instruction { display:block; margin-top:10px; font-size:13px; color:var(--text-secondary); }
+.delivery-rewrite-instruction textarea { display:block; box-sizing:border-box; width:100%; margin-top:6px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--field-bg); color:var(--text-primary); font:inherit; font-size:16px; resize:vertical; }
+.delivery-rewrite-diff { margin:12px 0 6px; overflow-wrap:anywhere; }
+.delivery-rewrite-diff > div { border-left:2px solid var(--border); margin:10px 0; padding-left:10px; }
+.delivery-rewrite-diff small { font-size:12px; color:var(--text-secondary); }
+.delivery-rewrite-diff p { margin:4px 0 10px; font-size:14px; line-height:1.65; white-space:pre-wrap; }
+.delivery-rewrite-diff mark { color:var(--text-strong); background:var(--surface-muted); font-weight:550; }
 .delivery-proof-state { display: block; padding-left: 14px; color: var(--text-muted); font-size: 12px; }
 .delivery-reasoning {
   margin-top: 26px;

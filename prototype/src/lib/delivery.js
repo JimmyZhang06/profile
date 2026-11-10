@@ -247,15 +247,7 @@ export function readDeliveryResult(raw, tag) {
   catch { fail("整份简历格式不完整"); }
 }
 
-export function parseDelivery(raw, prepared) {
-  const plan = typeof raw === "string" ? readDeliveryResult(raw, "resume") : raw;
-  if (
-    !plan ||
-    typeof plan !== "object" ||
-    !Array.isArray(plan.changes) ||
-    plan.changes.length > 20
-  )
-    fail("简历结构不正确");
+export function deliverySelection(plan, prepared) {
   const { seed, context } = prepared,
     r = seed.resume;
   const projectIds = ids(plan.projectIds, context.sources.map((s) => s.id), 2, "项目");
@@ -294,11 +286,11 @@ export function parseDelivery(raw, prepared) {
       .filter((f) => selected.has(f.id.split(":")[0]))
       .map((f) => f.id),
   );
-  const seen = new Set();
-  const changes = plan.changes.map((item) => {
-    if (!allowedFields.has(item?.field) || seen.has(item.field))
-      fail("改写包含未选择的字段");
-    seen.add(item.field);
+  return {projectIds, workIds, researchIds, catalog, allowedFields};
+}
+
+export function validatedChange(item, {catalog, allowedFields}) {
+    if (!allowedFields.has(item?.field)) fail("改写包含未选择的字段");
     const evidence = citations(
       item.evidence,
       catalog,
@@ -310,13 +302,46 @@ export function parseDelivery(raw, prepared) {
     const compact = item.compact
       ? groundedText(item.compact, evidence, max)
       : text;
+    // An optional fuller version uses exactly the same source excerpts. An
+    // invalid optional variant cannot displace an otherwise valid paragraph.
+    let expanded;
+    if (typeof item.expanded === "string" && item.expanded.length > text.length) {
+      try {
+        const fuller = groundedText(item.expanded, evidence, max);
+        if (fuller.length > text.length && addsSupportedDetail(text, fuller, evidence)) expanded = fuller;
+      } catch { /* Keep the verified primary and compact versions. */ }
+    }
     return {
       field: item.field,
       text,
       compact: compact.length < text.length ? compact : text,
+      ...(expanded ? {expanded} : {}),
       evidence,
     };
+}
+
+function addsSupportedDetail(text, fuller, evidence) {
+  const words = (s) => s.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase();
+  const before = words(text), after = words(fuller);
+  return evidence.some(({quote}) => {
+    const proof = words(quote);
+    for (let i = 0; i <= proof.length - 4; i++) {
+      const detail = proof.slice(i, i + 4);
+      if (after.includes(detail) && !before.includes(detail)) return true;
+    }
+    return false;
   });
+}
+
+export function parseDelivery(raw, prepared) {
+  const plan = typeof raw === "string" ? readDeliveryResult(raw, "resume") : raw;
+  if (!plan || !Array.isArray(plan.changes) || plan.changes.length > 20) fail("简历结构不正确");
+  const {context, seed:{resume:r}} = prepared;
+  const selection = deliverySelection(plan, prepared);
+  const {projectIds, workIds, researchIds, catalog} = selection;
+  const changes = plan.changes.map((item) => validatedChange(item, selection));
+  const seen = new Set(changes.map((c) => c.field));
+  if (seen.size !== changes.length) fail("改写包含未选择的字段或重复的字段");
   for (const id of projectIds) {
     const points = changes.filter((c) => c.field.startsWith(id + ":"));
     if (
@@ -489,7 +514,7 @@ export function nextPageAdjustment(r, changes = [], steps = []) {
     const records = recordSections.flatMap(({ key }) => visibleRecords(r, key));
     const visible = new Set([...r.projectIds, ...records.map((entry) => entry.id)]);
     for (const c of changes)
-      if (c.compact && c.compact.length < c.text.length && fieldValue(r, c.field) === c.text && !r.textStyles?.[c.field]?.marks?.length &&
+      if (c.compact && c.compact.length < fieldValue(r, c.field).length && [c.text,c.expanded].includes(fieldValue(r, c.field)) && !r.textStyles?.[c.field]?.marks?.length &&
           (!c.field.includes(":") || visible.has(c.field.split(":")[0])))
         next = setField(next, c.field, c.compact);
     if (next !== r) return {resume: next, step: "compact"};

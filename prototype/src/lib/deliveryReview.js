@@ -98,9 +98,9 @@ export function setReviewExperience(r, item, included) {
 // Trace a JD requirement to its quoted material and current wording. This is
 // a reference check, not a semantic match score for text the user has edited.
 export function requirementReview(r, plan, requirement, visible = new Set(reviewFields(r).map((f) => f.paperField))) {
-  const matches = plan.changes.filter((change) => visible.has(change.field) && change.evidence.some((proof) =>
+  const matches = plan.changes.filter((change) => visible.has(change.field) && fieldValue(r,change.field).trim() && change.evidence.some((proof) =>
     requirement.evidence.some((e) => e.source === proof.source && (e.quote.includes(proof.quote) || proof.quote.includes(e.quote)))));
-  const unchanged = matches.find((c) => [c.text, c.compact].includes(fieldValue(r, c.field)) && fieldValue(r, c.field).trim());
+  const unchanged = matches.find((c) => [c.text, c.compact, c.expanded].includes(fieldValue(r, c.field)) && fieldValue(r, c.field).trim());
   if (unchanged) return {label:'可对照当前正文', field:unchanged.field};
   if (matches.length) return {label:'措辞已调整，请核对', field:matches[0].field};
   for (const e of requirement.evidence) {

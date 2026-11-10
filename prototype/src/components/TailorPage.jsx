@@ -1,23 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { IconArrowRight, IconFileText } from "@tabler/icons-react";
 import { Page, Button, Field } from "./ui/index.jsx";
 import { SelectField } from "./ui/SelectField.jsx";
 import { jobFromListing, screeningBatches } from "../lib/deliverySelection.js";
 import { projectDetailFields, projectDetails } from "../lib/projects.js";
 import {
-  assembleDelivery,
   buildDeliveryContext,
   deliveryMaterials,
   deliveryProfile,
-  finalizeDelivery,
-  nextDeliveryFit,
   prepareDelivery,
   withApplicationAvailability,
 } from "../lib/delivery.js";
-import { runDelivery } from "../lib/assistant.js";
-import { DeliveryPreview } from "./DeliveryPreview.jsx";
-import { AssistantIdentity } from "./AssistantIdentity.jsx";
 import { DeliverySteps } from "./DeliverySteps.jsx";
+const DeliveryGeneration = lazy(() => import('./DeliveryGeneration.jsx').then((m) => ({default:m.DeliveryGeneration})));
 
 export function TailorPage({
   job: initialJob,
@@ -51,14 +46,7 @@ export function TailorPage({
     () => deliveryMaterials(projects, example, projectChoices, scopeChoices),
     [projects, example, projectChoices, scopeChoices],
   );
-  const [phase, setPhase] = useState("idle"),
-    [error, setError] = useState(""),
-    [message, setMessage] = useState(""),
-    [candidate, setCandidate] = useState(null);
-  const controller = useRef(null),
-    completed = useRef(false),
-    currentCandidate = useRef(null);
-  currentCandidate.current = candidate;
+  const [run, setRun] = useState(null), [error, setError] = useState(""), [message, setMessage] = useState("");
   const models = settings.connections.filter((item) => item.enabled !== false);
   const [preferred, setPreferred] = useState(savedOptions?.modelId ?? null);
   const bound = models.find((item) => item.id === settings.bindings.rewrite);
@@ -96,77 +84,30 @@ export function TailorPage({
     connection?.name,
     example,
   ]);
-  const busy = phase !== "idle";
+  const busy = !!run;
   const confirmed = !!prepared && approvedScope === prepared;
   const hasExamples = example || chosen.some((p) => p.example);
-  useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
     setApprovedScope(null);
   }, [settings.enabled, settings.capabilities.rewrite, sessionExpired]);
   const update = (patch) => setJob((old) => ({ ...old, ...patch }));
   function stop() {
-    controller.current?.abort();
-    controller.current = null;
-    setPhase("idle");
-    setCandidate(null);
-    setMessage("已停止；原简历和素材均已保留。");
+    setRun(null);
+    setMessage("已返回选材，本次填写的岗位与资料范围已保留。");
     setApprovedScope(null);
   }
-  async function generate() {
-    if (controller.current || busy || !canGenerate) return;
-    const task = new AbortController();
-    controller.current = task;
-    completed.current = false;
-    setPhase("writing");
+  function generate() {
+    if (busy || !canGenerate) return;
     setError("");
-    setMessage(
-      local
-        ? "正在按关键词选材并排版原文…"
-        : "正在分析岗位、筛选经历并撰写整份简历…",
-    );
+    setMessage("");
     try {
       const generation = prepareDelivery({ job, profile: withApplicationAvailability(personal, availability), projects: chosen, excludedRecords, approval: prepared.approval, connection, profileExample: example });
-      const plan = await runDelivery({
-        settings,
-        connectionId: modelId,
-        prepared: generation,
-        materialApproval: local ? undefined : prepared.approval,
-        signal: task.signal,
-        onText: (text) => {
-          if (controller.current === task && text) setMessage(text);
-        },
-      });
-      if (task.signal.aborted || controller.current !== task) return;
-      setCandidate(assembleDelivery(generation, plan));
-      setPhase("fitting");
-      setMessage("正在检查 A4 纸面、字号和内容长度…");
+      setRun({settings, connectionId:modelId, modelName:connection.name, prepared:generation,
+        materialApproval:local ? undefined : prepared.approval});
     } catch (e) {
-      if (controller.current !== task) return;
-      setError(e.name === "AbortError" ? "生成已停止。" : e.message);
-      setPhase("idle");
+      setError(e.message);
       setApprovedScope(null);
-      controller.current = null;
     }
-  }
-  function measured(result) {
-    const draft = currentCandidate.current;
-    if (
-      !draft ||
-      result.resume !== draft.resume ||
-      phase !== "fitting" ||
-      completed.current ||
-      controller.current?.signal.aborted
-    )
-      return;
-    const next = result.overflow ? nextDeliveryFit(draft) : null;
-    if (next) {
-      currentCandidate.current = next;
-      setCandidate(next);
-      return;
-    }
-    completed.current = true;
-    controller.current = null;
-    onReady(finalizeDelivery(draft));
   }
   const records = experiences.filter((entry) => !excludedRecords.includes(entry.id)).length;
   const requests = useMemo(() => !local && prepared ? screeningBatches(prepared.context).length + 1 : 0, [local, prepared]);
@@ -177,10 +118,14 @@ export function TailorPage({
     !!prepared &&
     (chosen.length || records) &&
     (local || (!sessionExpired && confirmed && settings.enabled && settings.capabilities.rewrite));
+  if (run) return <Suspense fallback={<Page title="正在打开写作纸面" onBack={stop} dirty />}>
+    <DeliveryGeneration run={run} onReady={onReady} onCancel={stop}
+      onError={(text) => {setRun(null); setError(text); setApprovedScope(null);}} />
+  </Suspense>;
   return (
     <Page
       title="按 JD 生成简历"
-      description="粘贴 JD，确认参与选材的经历。生成后可以在纸面上改字、取舍经历并保存 PDF。"
+      description="粘贴 JD，选择参与写作的资料。简历会按一页 A4 的空间逐段生成。"
       onBack={onBack}
       className="page-wide tailor-page"
       actions={onManual && <Button variant="ghost" disabled={busy} onClick={() => onManual(job, options)}>手动创建简历</Button>}
@@ -194,18 +139,12 @@ export function TailorPage({
       footer={
         <>
           <span className="footer-note">
-            A4 一页优先 · 正文 11 pt · 最低 10.5 pt
+            A4 一页 · 正文 11 pt
           </span>
-          {busy ? (
-            <Button variant="secondary" onClick={stop}>
-              停止生成
-            </Button>
-          ) : (
             <Button disabled={!canGenerate} onClick={generate}>
               {local ? "生成本地选材草稿" : "生成整份投递草稿"}
               <IconArrowRight size={16} />
             </Button>
-          )}
         </>
       }
     >
@@ -406,29 +345,13 @@ export function TailorPage({
                 onChange={(e) => setApprovedScope(e.target.checked ? prepared : null)}
               />
               <span>
-                我同意将上述资料发送给「{connection.name}」。本次预计调用 {requests} 次，用于选材和成稿。姓名和联系方式单独在本机排版，经历正文中的个人信息请先核对。
+                我同意将上述资料发送给「{connection.name}」。选材和成稿预计 {requests} 次调用，若排版仍然超页，最多再调用 1 次精简入选经历。姓名和联系方式在本机排版。
               </span>
             </label>
           ) : null}
         </section>
       </fieldset>
-      {busy ? (
-        <div className="tailor-progress">
-          <AssistantIdentity
-            offline={local || phase === "fitting"}
-            status="streaming"
-            hasText={false}
-          />
-          <div>
-            <strong>
-              {phase === "fitting"
-                ? "检查整份简历的纸面效果"
-                : "正在制作投递草稿"}
-            </strong>
-            <p>{message}</p>
-          </div>
-        </div>
-      ) : message && !error ? (
+      {message && !error ? (
         <p className="quiet-note" role="status">
           {message}
         </p>
@@ -442,13 +365,6 @@ export function TailorPage({
         <p className="quiet-note">
           请先在资料库补充至少一份项目、实习或研究经历。
         </p>
-      ) : null}
-      {candidate ? (
-        <DeliveryPreview
-          hidden
-          resume={candidate.resume}
-          onMeasure={measured}
-        />
       ) : null}
     </Page>
   );

@@ -3,6 +3,7 @@ import { buildProjectBullets, getProjectBullets, materialFingerprint, projectDet
 import { templateDesign, validResumeDesign } from './resumeDesign.js';
 import { formattedMarkdown, marksForField, normalizeMarks, validTextStyles } from './richText.js';
 import { validDelivery } from './deliverySchema.js';
+import { sameWording } from './revisionText.js';
 import { descriptionFields, findRecordField, profileForResume, profileSnapshot, syncLegacyFields, validProfile, validProfileSections, visibleContacts, visibleRecords } from './profile.js';
 
 export const STORAGE_KEY = 'luli.workspace.v2';
@@ -101,7 +102,8 @@ export function validateSuggestions(items, doc) {
       : ['summary', 'experience', 'skills', ...descriptionFields(doc.resume)].map(key => fieldValue(doc.resume, key)).join(' ') + sources.map(projectEvidenceText).join(' ');
     const numbers = new Set((evidence + ' ' + fieldValue(doc.resume, p.field)).match(/\d+(?:\.\d+)?/g) || []);
     if ((p.after.match(/\d+(?:\.\d+)?/g) || []).some(n => !numbers.has(n))) return false;
-    seen.add(p.field); return p.after !== fieldValue(doc.resume, p.field);
+    if (sameWording(p.after, fieldValue(doc.resume, p.field))) return false;
+    seen.add(p.field); return true;
   }).map(p => ({ id: uid(), field: p.field, before: fieldValue(doc.resume, p.field), after: p.after.trim(), reason: String(p.reason || '根据当前经历调整表达').slice(0, 600), jobText: doc.job.text, sourceFingerprint: sourceFingerprint(doc, p.field) }));
 }
 function sourceFingerprint(doc, field) {
