@@ -28,6 +28,18 @@ export const deliveryDetailKeys = [
   "challenges",
   "collaboration",
 ];
+// The cloud library can arrive after the JD form is opened. Keep only the
+// user's choices in state and derive defaults from the current library.
+export function deliveryMaterials(projects, example, projectChoices = {}, scopeChoices = {}) {
+  const chosen = projects.filter((p) => Object.hasOwn(projectChoices, p.id)
+    ? projectChoices[p.id] : !p.archived && (!p.example || example));
+  const scopes = Object.fromEntries(chosen.map((p) => {
+    const details = projectDetails(p);
+    const keys = Object.hasOwn(scopeChoices, p.id) ? scopeChoices[p.id] : deliveryDetailKeys;
+    return [p.id, keys.filter((key) => details[key])];
+  }));
+  return { chosen, scopes };
+}
 export const deliveryDesign = () => ({
   ...templateDesign("compact"),
   font: "sans",

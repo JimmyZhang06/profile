@@ -14,6 +14,7 @@ import {
   nextDeliveryFit,
   deliveryIssues,
   localDelivery,
+  deliveryMaterials,
   withApplicationAvailability,
 } from "../src/lib/delivery.js";
 import {
@@ -26,6 +27,21 @@ import { chatDeliveryJob, jobFromListing, jobFromFragment, screeningBatches, res
 
 const prepare = (approval) =>
   prepareDelivery({ job, profile, projects, approval, connection });
+test("materials arriving after the form opens use current defaults and preserve each explicit choice", () => {
+  const archived = {...projects[1], id:"archived", archived:true};
+  const sample = {...projects[0], id:"sample", example:true};
+  const options = {campus:false};
+  const scopeChoices = {atlas:[]};
+  assert.deepEqual(deliveryMaterials([], false, options, scopeChoices).chosen, []);
+  const library = [...projects, archived, sample, {...projects[0], id:"new"}];
+  const incoming = deliveryMaterials(library, false, options, scopeChoices);
+  assert.deepEqual(incoming.chosen.map((p) => p.id), ["atlas","new"]);
+  assert.deepEqual(incoming.scopes.atlas, []);
+  assert(incoming.scopes.new.includes("results"));
+  assert(!incoming.scopes.new.includes("notes"));
+  assert(deliveryMaterials(library, true).chosen.includes(sample));
+  assert(deliveryMaterials(library, false, {archived:true}).chosen.includes(archived));
+});
 const parse = (value, prepared = prepare()) =>
   parseDelivery("<resume>" + JSON.stringify(value) + "</resume>", prepared);
 test("all work and research are candidates independently of manual visibility, and exclusions stay private", () => {

@@ -7,7 +7,7 @@ import { projectDetailFields, projectDetails } from "../lib/projects.js";
 import {
   assembleDelivery,
   buildDeliveryContext,
-  deliveryDetailKeys,
+  deliveryMaterials,
   deliveryProfile,
   finalizeDelivery,
   nextDeliveryFit,
@@ -39,17 +39,13 @@ export function TailorPage({
   const [availabilityOverride, setAvailabilityOverride] = useState(savedOptions?.availabilityOverride ?? null);
   const availability = availabilityOverride ?? storedAvailability;
   const projects = library;
-  const [excluded, setExcluded] = useState(() => savedOptions?.excluded ?? projects.filter((p) =>
-    p.archived || (p.example && !example)).map((p) => p.id));
+  const [projectChoices, setProjectChoices] = useState(savedOptions?.projectChoices ?? {});
+  const [scopeChoices, setScopeChoices] = useState(savedOptions?.scopeChoices ?? {});
   const [excludedRecords, setExcludedRecords] = useState(() => savedOptions?.excludedRecords ?? []);
   const experiences = useMemo(() => [...personal.workEntries, ...personal.researchEntries], [personal]);
-  const [scopes, setScopes] = useState(() =>
-    Object.fromEntries(
-      projects.map((p) => [
-        p.id,
-        savedOptions?.scopes[p.id] ?? deliveryDetailKeys.filter((k) => projectDetails(p)[k]),
-      ]),
-    ),
+  const { chosen, scopes } = useMemo(
+    () => deliveryMaterials(projects, example, projectChoices, scopeChoices),
+    [projects, example, projectChoices, scopeChoices],
   );
   const [phase, setPhase] = useState("idle"),
     [error, setError] = useState(""),
@@ -69,16 +65,12 @@ export function TailorPage({
     ? { id: "offline", baseUrl: "http://localhost", name: "本地整理" }
     : models.find((c) => c.id === modelId);
   const [approvedScope, setApprovedScope] = useState(null);
-  const chosen = useMemo(
-    () => projects.filter((p) => !excluded.includes(p.id)),
-    [projects, excluded],
-  );
   const prepared = useMemo(() => {
     if (!connection) return null;
     const approval = {
       connectionId: connection.id,
       baseUrl: connection.baseUrl,
-      scopes: Object.fromEntries(chosen.map((p) => [p.id, scopes[p.id] || []])),
+      scopes,
     };
     const context = buildDeliveryContext({
       job,
@@ -174,7 +166,7 @@ export function TailorPage({
   }
   const records = experiences.filter((entry) => !excludedRecords.includes(entry.id)).length;
   const requests = useMemo(() => !local && prepared ? screeningBatches(prepared.context).length + 1 : 0, [local, prepared]);
-  const options = { excluded, excludedRecords, scopes, modelId: preferred, availabilityOverride };
+  const options = { projectChoices, excludedRecords, scopeChoices, modelId: preferred, availabilityOverride };
   const canGenerate =
     job.title.trim() &&
     job.text.trim().length >= 20 &&
@@ -284,18 +276,15 @@ export function TailorPage({
                   <label>
                     <input
                       type="checkbox"
-                      checked={!excluded.includes(p.id)}
-                      onChange={(e) =>
-                        setExcluded((old) =>
-                          e.target.checked
-                            ? old.filter((id) => id !== p.id)
-                            : [...old, p.id],
-                        )
-                      }
+                      checked={Object.hasOwn(scopes, p.id)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setProjectChoices((old) => ({ ...old, [p.id]: checked }));
+                      }}
                     />
                     <strong>{p.name}{p.archived ? "（已归档）" : p.example ? "（示例）" : ""}</strong>
                   </label>
-                  {!excluded.includes(p.id) ? (
+                  {Object.hasOwn(scopes, p.id) ? (
                     <div className="tailor-scope">
                       {projectDetailFields
                         .filter((f) => projectDetails(p)[f.key])
@@ -304,14 +293,12 @@ export function TailorPage({
                             <input
                               type="checkbox"
                               checked={scopes[p.id]?.includes(f.key) || false}
-                              onChange={(e) =>
-                                setScopes((old) => ({
-                                  ...old,
-                                  [p.id]: e.target.checked
-                                    ? [...(old[p.id] || []), f.key]
-                                    : old[p.id].filter((k) => k !== f.key),
-                                }))
-                              }
+                              onChange={(e) => {
+                                const keys = e.target.checked
+                                  ? [...scopes[p.id], f.key]
+                                  : scopes[p.id].filter((k) => k !== f.key);
+                                setScopeChoices((old) => ({ ...old, [p.id]: keys }));
+                              }}
                             />
                             {f.label}
                           </label>
