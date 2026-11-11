@@ -14,6 +14,7 @@ import { readModelDomains } from "./model-domains.mjs";
 import { restrictMaterialContext } from "../../src/lib/materialScope.js";
 import { systemPrompt } from "../ai.mjs";
 import { deliveryMessages } from "../delivery-prompt.mjs";
+import { isDeliveryPurpose } from "../../src/lib/deliverySelection.js";
 
 export function safeConnection(row) {
   return {
@@ -246,7 +247,7 @@ export async function streamModel(
       connection.data.baseUrl,
       allowedHosts,
     );
-    const delivery = ["delivery", "delivery-selection"].includes(body.purpose);
+    const delivery = isDeliveryPurpose(body.purpose);
     const messages = testing
       ? [{ role: "user", content: "Reply with OK." }]
       : delivery ? deliveryMessages(body, context)
@@ -321,6 +322,7 @@ export async function streamModel(
     });
     let buffer = "",
       ended = false,
+      outputLimited = false,
       providerError = false;
     const decoder = new TextDecoder();
     for await (const chunk of response.body) {
@@ -338,6 +340,7 @@ export async function streamModel(
               const event = JSON.parse(raw);
               if (event.usage) usage = event.usage;
               if (event.error) providerError = true;
+              if (event.choices?.some((choice) => choice.finish_reason === 'length')) outputLimited = true;
             } catch {
               /* Ignore extension events; the client validates response completion. */
             }
@@ -346,7 +349,7 @@ export async function streamModel(
       if (buffer.length > 1_000_000) throw new Error("Invalid stream");
     }
     status =
-      ended && !providerError && !controller.signal.aborted
+      ended && !providerError && !outputLimited && !controller.signal.aborted
         ? "succeeded"
         : controller.signal.aborted
           ? "cancelled"
@@ -354,10 +357,9 @@ export async function streamModel(
     errorType =
       status === "succeeded"
         ? null
-        : providerError
+        : outputLimited ? "OUTPUT_LIMIT" : providerError
           ? "PROVIDER_STREAM_ERROR"
           : "STREAM_INTERRUPTED";
-    res.end();
   } catch (error) {
     if (controller.signal.aborted) {
       status = "cancelled";
@@ -365,30 +367,28 @@ export async function streamModel(
       if (testing && !res.destroyed) throw new HttpError(504, "模型测试超时，请稍后重试。", "MODEL_TEST_TIMEOUT");
     }
     else if (error.code) errorType = error.code;
-    if (res.headersSent) res.end();
-    else
+    if (!res.headersSent)
       throw error instanceof HttpError
         ? error
         : new HttpError(502, "模型连接未完成，请稍后重试。");
   } finally {
     clearTimeout(timer);
     res.off("close", cancel);
-    await dispatcher?.close();
-    await query(
-      db,
-      "UPDATE model_usage SET status=$2,duration_ms=$3,input_tokens=$4,output_tokens=$5,error_type=$6 WHERE id=$1",
-      [
-        id,
-        status,
-        Date.now() - started,
-        Number.isInteger(usage.prompt_tokens) ? usage.prompt_tokens : null,
-        Number.isInteger(usage.completion_tokens)
-          ? usage.completion_tokens
-          : null,
-        errorType,
-      ],
-    );
-    if (platformTest) await audit(db, actor.user, "model.test", connection.id, null,
-      { status, errorType, model: connection.data.model, durationMs: Date.now() - started }, "管理员主动测试平台模型连接");
+    try {
+      await query(
+        db,
+        "UPDATE model_usage SET status=$2,duration_ms=$3,input_tokens=$4,output_tokens=$5,error_type=$6 WHERE id=$1",
+        [id, status, Date.now() - started,
+          Number.isInteger(usage.prompt_tokens) ? usage.prompt_tokens : null,
+          Number.isInteger(usage.completion_tokens) ? usage.completion_tokens : null, errorType],
+      );
+      if (platformTest) await audit(db, actor.user, "model.test", connection.id, null,
+        { status, errorType, model: connection.data.model, durationMs: Date.now() - started }, "管理员主动测试平台模型连接");
+    } finally {
+      // A client can start the next section as soon as the response ends.
+      // Release the previous in-flight quota reservation first.
+      if (res.headersSent && !res.writableEnded && !res.destroyed) res.end();
+      await dispatcher?.close();
+    }
   }
 }

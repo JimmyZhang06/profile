@@ -130,7 +130,7 @@ export function ModelServices({ api, onDirty, initialView = 'connections' }) {
               <Field label="API Key" hint="加密保存；更换 API 地址时需重新填写密钥。"><input name="platform-model-secret" type="password" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={draft.apiKey} placeholder={draft.keyMask || '输入模型服务的 API Key'} onChange={e => change('apiKey', e.target.value)} /></Field>
               <div className="model-form-grid">
                 <Field label="每月调用上限"><input type="number" min="0" max="1000000" required value={draft.monthlyLimit} onChange={e => change('monthlyLimit', Number(e.target.value))} /></Field>
-                <Field label="单次最大输出 token" hint="整份简历建议 8192；以模型支持范围为准。"><input type="number" min="256" max="16384" required value={draft.maxOutputTokens} onChange={e => change('maxOutputTokens', Number(e.target.value))} /></Field>
+                <Field label="单次最大输出 token" hint="按服务商支持范围填写。较低上限会分段成稿，每轮计为一次调用。"><input type="number" min="256" max="16384" required value={draft.maxOutputTokens} onChange={e => change('maxOutputTokens', Number(e.target.value))} /></Field>
               </div>
               <SelectField label="服务状态" value={draft.enabled ? 'on' : 'off'} disabled={!!busy} onChange={value => change('enabled', value === 'on')}
                 options={[{ value: 'off', label: '停用 · 仅管理员可测试' }, { value: 'on', label: '启用 · 提供给用户' }]} />

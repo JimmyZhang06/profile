@@ -100,6 +100,20 @@ export function screeningBatches(context) {
   return batches;
 }
 
+export const isDeliveryPurpose = (purpose) => ['delivery', 'delivery-selection', 'delivery-section'].includes(purpose);
+
+// Two short retries are shared by the entire run: one ballot and one section.
+// Page fitting may make one final call after the complete draft is measured.
+export function deliveryCallPlan(context, maxOutputTokens, batches = screeningBatches(context).length) {
+  const experiences = Math.min(2, context.sources.length)
+    + Math.min(2, context.fields.filter((f) => f.kind === 'workEntries').length)
+    + Math.min(1, context.fields.filter((f) => f.kind === 'researchEntries').length);
+  const bySection = maxOutputTokens > 0 && maxOutputTokens < 8192;
+  const sectionCalls = Math.max(1, batches) + Number(batches > 1) + experiences + 1;
+  return {bySection, usual: bySection ? sectionCalls : batches + 1,
+    maximum: sectionCalls + Number(!bySection) + 2 + 1};
+}
+
 export function validateShortlist(result, context) {
   const chosen = [];
   for (const [key, kind, max] of [['projectIds','project',2], ['workIds','workEntries',2], ['researchIds','researchEntries',1]]) {

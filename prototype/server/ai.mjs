@@ -1,5 +1,6 @@
 import { restrictMaterialContext } from '../src/lib/materialScope.js';
 import { deliveryMessages } from './delivery-prompt.mjs';
+import { isDeliveryPurpose } from '../src/lib/deliverySelection.js';
 
 const connections = new Map();
 const json = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
@@ -45,7 +46,7 @@ export function aiMiddleware() {
         try { context = restrictMaterialContext(data.context, data.materialApproval, { ...connection, id: data.connectionId }); }
         catch (error) { return json(res, 400, { error: error.message }); }
       }
-      const delivery = ['delivery', 'delivery-selection'].includes(data.purpose);
+      const delivery = isDeliveryPurpose(data.purpose);
       const messages = testing ? [{ role: 'user', content: 'Reply with OK.' }] : delivery ? deliveryMessages(data, context) : [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: '以下是当前资料：\n' + JSON.stringify(context) },

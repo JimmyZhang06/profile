@@ -9,7 +9,6 @@ import {assembleDelivery, finalizeDelivery} from '../lib/delivery.js';
 import {composePage, paperOutline, paperWording, writingPaper} from '../lib/deliveryComposition.js';
 import {refitDelivery, runDelivery} from '../lib/assistant.js';
 import {createTypewriter} from '../lib/typewriter.js';
-import {fieldLabel} from '../lib/workspace.js';
 import {useMediaQuery} from '../hooks/useMediaQuery.js';
 
 const stages = ['预留版面', '对照岗位选材', '逐段成稿', '检查一页排版'];
@@ -81,7 +80,11 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
       setPhase(1);
       setStatus(local ? '正在从本机资料选择相关原文。' : '正在比较候选经历与岗位要求。');
       const plan = await runDelivery({...run, paperSpace:space, signal:abort.signal, onField:append,
-        onText:(message) => { if (!abort.signal.aborted) { setStatus(message); if (message.includes('改写正文')) setPhase(2); } }});
+        onResetFields:() => {
+          if (abort.signal.aborted) return;
+          items.length = 0; seen.clear(); text = ''; writer.push('',true); setLive(null);
+        },
+        onText:(message,step) => { if (!abort.signal.aborted) { setStatus(message); if (step) setPhase(step); } }});
       abort.signal.throwIfAborted();
       if (!plan.projectIds.length && !plan.workIds.length && !plan.researchIds.length) throw new Error('当前素材没有可写入的具体经历。请先补充自己的行动或交付成果。');
       const draft = assembleDelivery(prepared,plan);
@@ -167,7 +170,7 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
       <ol aria-label="成稿进度">{stages.map((name,i) => <li key={name} aria-current={i === phase ? 'step' : undefined}>
         <span aria-hidden="true">{i < phase ? <IconCheck size={13} /> : i+1}</span>{narrow ? mobileStages[i] : name}
       </li>)}</ol>
-      <p role="status">{phase === 2 && live?.field ? '正在写入' + fieldLabel(paper,live.field) : status}</p>
+      <p role="status">{status}</p>
       {repair && <><p className="generation-fit" role="status">{!room ? '正在重新测量…' : room.horizontal ? '部分内容超出纸面宽度' : room.overflow ? '还需减少约 ' + Math.ceil(room.overflowMm) + ' mm' : '已排入一页'}</p>
         <DeliveryProofread doc={candidate} resume={paper} field={field} jump={jump} onField={setField}
           onChange={editRepair} onError={setStatus} onTailor={onCancel} />

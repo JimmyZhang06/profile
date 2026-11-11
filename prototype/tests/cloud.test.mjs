@@ -582,10 +582,22 @@ test("account, workspace and administration enforce real session and ownership b
     const connection = (await alice.request("cloud/connections")).data.connections.find((c) => c.id === modelId);
     const settings = { cloudAccount: aliceUser.id, enabled: true, capabilities: { rewrite: true },
       bindings: { rewrite: "offline" }, connections: [connection] };
-    const scans = [], writes = [];
+    const scans = [], writes = [], recovery = [];
     const restoreAdapter = registerCloudAdapter("compatible", async ({messages}) => {
       assert.equal(messages.length, 3);
       const context = JSON.parse(messages[1].content.split("\n").slice(1).join("\n"));
+      if (context.material) {
+        const review = messages[2].content.includes('正文经历已经写好');
+        recovery.push(review ? 'review' : 'project');
+        const fact = context.material.find((m) => m.text === library[1].facts[0]);
+        assert(fact);
+        assert(!JSON.stringify(context).includes(library[2].name));
+        const answer = review
+          ? {matches:[{jd:context.job.text,refs:[fact.ref]}]}
+          : {rows:[{text:'围绕报名反馈复盘活动，并整理后续内容排期。',refs:[fact.ref]}]};
+        return new Response('data: '+JSON.stringify({choices:[{delta:{content:JSON.stringify(answer)}}]})+'\n\ndata: [DONE]\n\n',
+          {headers:{'Content-Type':'text/event-stream'}});
+      }
       const selecting = !messages[0].content.includes("<resume>");
       const machineLearning = context.job.title === "模型平台";
       const chosen = context.sources.find((s) => s.name === (machineLearning ? "语音建模" : "校园内容计划"));
@@ -598,6 +610,8 @@ test("account, workspace and administration enforce real session and ownership b
         result = JSON.stringify(ids);
       } else {
         writes.push(context.sources.map((s) => s.name));
+        if (!machineLearning) return new Response('data: '+JSON.stringify({choices:[{delta:{content:'<resume>{"projectIds":'},finish_reason:'length'}]})+
+          '\n\ndata: {"usage":{"completion_tokens":256}}\n\ndata: [DONE]\n\n',{headers:{'Content-Type':'text/event-stream'}});
         const evidence = [{source: chosen.id + ":fact:0", quote: chosen.facts[0]}];
         const text = machineLearning ? "将训练和评估数据按家庭分组，设计交叉验证。" : "围绕报名反馈复盘活动，并整理后续内容排期。";
         result = "<resume>" + JSON.stringify({...ids, changes: [{field: chosen.id + ":0", text, evidence}],
@@ -624,6 +638,10 @@ test("account, workspace and administration enforce real session and ownership b
       }
       assert.deepEqual(scans, [library.map((s) => s.name), library.map((s) => s.name)]);
       assert.deepEqual(writes, [["语音建模"], ["校园内容计划"]]);
+      assert.deepEqual(recovery,['project','review']);
+      const limited = await one(app.db,"SELECT status,output_tokens FROM model_usage WHERE user_id=$1 AND error_type='OUTPUT_LIMIT'",[aliceUser.id]);
+      assert.equal(limited.status,'failed');
+      assert.equal(limited.output_tokens,256);
       const saved = await alice.request("cloud/workspace", "PUT", {
         state: {...original.state, documents: [...original.state.documents, ...documents], activeId: documents[1].id},
         revision: original.revision, mutationId: "two-tailored-drafts",

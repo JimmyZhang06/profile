@@ -15,6 +15,7 @@ export function validDelivery(value) {
   return (
     !!value &&
     ["local", "model"].includes(value.mode) &&
+    (value.writingMethod === undefined || value.writingMethod === "sections") &&
     (value.modelLabel === undefined || typeof value.modelLabel === "string") &&
     (value.modelId === undefined || typeof value.modelId === "string") &&
     Number.isFinite(value.createdAt) &&

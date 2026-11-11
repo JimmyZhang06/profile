@@ -6,6 +6,8 @@ A user should be able to complete each application inside the site. New Resume o
 
 Measure the actual header and education identities before the writer starts. Allocate the remaining lines to specific, evidenced work relevant to the JD, using fuller descriptions only when they add facts and fit with breathing room. During generation progressively reveal verified fields in the manuscript. Support cancellation, skipping animation and reduced motion. Only hand a new draft to the proofreader after the complete paper fits. In-place AI revision must give a materially different replacement, show the changed text, and update the paper on adoption.
 
+When a model hits its output limit, support bounded, sequential lookups of the approved experiences. Prefer section writing up front for small output budgets, reuse completed screening, and resolve short evidence references against the original material. Show the maximum calls before consent, respect stop and quota errors, and require a complete evidence-checked draft before saving.
+
 ## JD to application-ready resume (2026-11-02)
 
 The core outcome is a truthful, JD-specific resume that can be submitted, rather than an editor that only offers paragraph suggestions. Keep the full flow accessible from New Resume, the JD page and the compact workspace toolbar: confirm candidate materials and model destination, generate an independent whole draft, measure the actual A4 rendering, review evidence and save a text-based PDF through the system print dialog. Preserve all original resumes and materials.

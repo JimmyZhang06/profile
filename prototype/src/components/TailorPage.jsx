@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { IconArrowRight, IconFileText } from "@tabler/icons-react";
 import { Page, Button, Field } from "./ui/index.jsx";
 import { SelectField } from "./ui/SelectField.jsx";
-import { jobFromListing, screeningBatches } from "../lib/deliverySelection.js";
+import { deliveryCallPlan, jobFromListing } from "../lib/deliverySelection.js";
 import { projectDetailFields, projectDetails } from "../lib/projects.js";
 import {
   buildDeliveryContext,
@@ -82,6 +82,7 @@ export function TailorPage({
     connection?.baseUrl,
     connection?.model,
     connection?.name,
+    connection?.maxOutputTokens,
     example,
   ]);
   const busy = !!run;
@@ -110,7 +111,8 @@ export function TailorPage({
     }
   }
   const records = experiences.filter((entry) => !excludedRecords.includes(entry.id)).length;
-  const requests = useMemo(() => !local && prepared ? screeningBatches(prepared.context).length + 1 : 0, [local, prepared]);
+  const calls = useMemo(() => !local && prepared ? deliveryCallPlan(prepared.context,connection?.maxOutputTokens) : null,
+    [local, prepared, connection?.maxOutputTokens]);
   const options = { projectChoices, excludedRecords, scopeChoices, modelId: preferred, availabilityOverride };
   const canGenerate =
     job.title.trim() &&
@@ -290,11 +292,6 @@ export function TailorPage({
             ]} disabled={busy} />
           {!local && sessionExpired ? <p className="form-error" role="alert">云端登录已过期。请从页面上方重新登录后生成。</p> : null}
           {!local && (!settings.enabled || !settings.capabilities.rewrite) ? <p className="form-error">请在模型设置中开启 AI 辅助及对话与改写。</p> : null}
-          {!local && connection?.maxOutputTokens < 8192 ? (
-            <p className="quiet-note">
-              当前模型的输出上限较低，整份简历及原文依据可能无法一次写完。可在模型设置中调整；平台模型由管理员配置。
-            </p>
-          ) : null}
           {prepared ? (
             <details>
               <summary>
@@ -337,7 +334,7 @@ export function TailorPage({
               </div>
             </details>
           ) : null}
-          {!local && connection ? (
+          {!local && connection && calls ? (
             <label className="tailor-consent">
               <input
                 type="checkbox"
@@ -345,7 +342,10 @@ export function TailorPage({
                 onChange={(e) => setApprovedScope(e.target.checked ? prepared : null)}
               />
               <span>
-                我同意将上述资料发送给「{connection.name}」。选材和成稿预计 {requests} 次调用，若排版仍然超页，最多再调用 1 次精简入选经历。姓名和联系方式在本机排版。
+                我同意将所选资料发送给「{connection.name}」。{calls.bySection
+                  ? '将按经历分段成稿，按入选数量预计不超过 ' + calls.usual + ' 次调用。'
+                  : '预计 ' + calls.usual + ' 次调用，整篇回复过长时会自动分段。'}
+                含重试和一页排版调整，本次最多 {calls.maximum} 次。姓名与联系方式在本机排版。
               </span>
             </label>
           ) : null}

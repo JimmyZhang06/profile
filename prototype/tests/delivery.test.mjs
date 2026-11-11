@@ -35,10 +35,122 @@ import { composePage, paperOutline, writingPaper } from "../src/lib/deliveryComp
 import { pageWritingBudget } from "../src/lib/deliverySpace.js";
 import { deliveryMessages } from "../server/delivery-prompt.mjs";
 import { changedSpan, rewriteIssue } from "../src/lib/revisionText.js";
-import { chatDeliveryJob, jobFromListing, jobFromFragment, screeningBatches, restoreDeliveryIds, deliveryModelContext, shortlistedContext } from "../src/lib/deliverySelection.js";
+import { chatDeliveryJob, jobFromListing, jobFromFragment, screeningBatches, restoreDeliveryIds, deliveryCallPlan, deliveryModelContext, shortlistedContext } from "../src/lib/deliverySelection.js";
 
 const prepare = (approval) =>
   prepareDelivery({ job, profile, projects, approval, connection });
+
+function completion(content, finish_reason = 'stop') {
+  return new Response('data: ' + JSON.stringify({choices:[{delta:{content},finish_reason}]}) + '\n\ndata: [DONE]\n\n',
+    {headers:{'Content-Type':'text/event-stream'}});
+}
+
+test('small-output generation recovers at the ballot and a single record, keeps completed work and checks the original evidence',async () => {
+  const third = {...projects[1],id:'last',name:'其他短期项目'};
+  const approval = {connectionId:connection.id,baseUrl:connection.baseUrl,scopes:{atlas:['actions']}};
+  const prepared = prepareDelivery({job,profile,projects:[...projects,third],connection,approval});
+  const settings = {enabled:true,capabilities:{rewrite:true},bindings:{rewrite:connection.id},connections:[{...connection,maxOutputTokens:2048}]};
+  const calls = [], rendered = [], oldFetch=globalThis.fetch;
+  globalThis.fetch = async (_url,init) => {
+    const body = JSON.parse(init.body);
+    const messages=deliveryMessages(body,body.context);
+    const data=JSON.parse(messages[1].content.split('\n').slice(1).join('\n'));
+    assert(!JSON.stringify(messages).includes('PRIVATE-RAW'));
+    assert(!JSON.stringify(messages).includes(profile.contact));
+    calls.push(body);
+    if (body.purpose === 'delivery-selection') {
+      if (!body.brief) return completion('{"projectIds":[','length');
+      assert.deepEqual(data.candidates.map((c) => c.id),['P1','P2','P3','W1']);
+      return completion('{"projectIds":["P1"],"workIds":["W1"],"researchIds":[]}');
+    }
+    assert.equal(body.purpose,'delivery-section');
+    assert(!JSON.stringify(data).includes(third.name));
+    if (body.part === 'review') {
+      assert(body.brief);
+      assert(!JSON.stringify(data).includes(projects[0].facts[1]));
+      const fact=data.material.find((m) => m.text === projects[0].details.actions);
+      return completion(JSON.stringify({matches:[{jd:'负责用户访谈与需求分析',refs:[fact.ref]}]}));
+    }
+    if (body.part === 'work') {
+      assert.equal(body.context.sources.length,0);
+      assert.deepEqual(body.context.fields.map((f) => f.id),['legacy-work:description']);
+      return completion(JSON.stringify({rows:[{text:profile.experience,refs:[1]}]}));
+    }
+    assert.deepEqual(body.context.sources.map((s) => s.id),['atlas']);
+    if (!body.brief) return completion('{"rows":[{"text":"未完成段落','length');
+    const proof=data.material.find((m) => m.text === projects[0].details.actions);
+    return completion(JSON.stringify({rows:[{text:'梳理资料收集与发布审核流程，将重复操作整理为需求清单。',refs:[proof.ref]}]}));
+  };
+  try {
+    const result = await runDelivery({settings,prepared,materialApproval:approval,onField:(c) => rendered.push(c.field),signal:new AbortController().signal});
+    assert.deepEqual(calls.map((b) => b.part ?? b.purpose),['delivery-selection','delivery-selection','work','project','project','review']);
+    assert.deepEqual(rendered,['legacy-work:description','atlas:0']);
+    assert.equal(result.writingMethod,'sections');
+    const citation = result.requirements[0].evidence[0];
+    assert.equal(citation.source,'atlas:details:actions');
+    assert.equal(citation.quote,projects[0].details.actions);
+    assert(calls.length < deliveryCallPlan(prepared.context,2048).maximum);
+    const doc=assembleDelivery(prepared,result);
+    assert.equal(doc.resume.name,profile.name);
+    assert.deepEqual(doc.resume.projectIds,['atlas']);
+  } finally {globalThis.fetch=oldFetch;}
+});
+
+test('scoped lookups stop on quota, cancellation, or an unknown evidence reference without retrying unrelated errors',async () => {
+  const prepared=prepare(), settings={enabled:true,capabilities:{rewrite:true},bindings:{rewrite:connection.id},connections:[{...connection,maxOutputTokens:512}]};
+  const original=globalThis.fetch;
+  try {
+    for(const issue of ['quota','bad evidence','abort','minimal length']){
+      const ctrl=new AbortController(),calls=[];
+      globalThis.fetch=async (_url,opts) => {
+        const b=JSON.parse(opts.body);calls.push(b);
+        if(b.purpose==='delivery-selection') return completion('{"projectIds":["P1"],"workIds":[],"researchIds":[]}');
+        if(issue==='quota')return Response.json({error:'本月 AI 调用额度已用完'},{status:429});
+        if(issue==='minimal length') {assert(b.brief);return completion('{"rows":[','length');}
+        return completion(JSON.stringify({rows:[{text:projects[0].facts[0],refs:[issue==='bad evidence'?99:1]}]}));
+      };
+      const promise=runDelivery({settings,prepared,signal:ctrl.signal,onField:() => {if(issue==='abort')ctrl.abort();}});
+      const expected={quota:/额度已用完/, 'bad evidence':/以外的依据/, abort:{name:'AbortError'}, 'minimal length':/最短的单条经历/};
+      await assert.rejects(promise,expected[issue]);
+      assert.equal(calls.length,2);
+    }
+  } finally {globalThis.fetch=original;}
+});
+
+test('a large archive gets a final comparison across batches; fitting then reads only the longest selected section',async () => {
+  const late={...projects[0],id:'late',name:'后排候选',facts:[projects[0].facts[0]]};
+  const archive=[projects[0],projects[1],late].map((s) => ({...s,facts:[...s.facts,'辅助背景。'.repeat(5000)]}));
+  const prepared=prepareDelivery({job,profile,projects:archive,connection});
+  const n=screeningBatches(prepared.context).length;
+  assert(n>1);
+  const settings={enabled:true,capabilities:{rewrite:true},bindings:{rewrite:connection.id},connections:[{...connection,maxOutputTokens:2048}]};
+  const input={prepared,settings,connectionId:connection.id,signal:new AbortController().signal};
+  const old=globalThis.fetch;let votes=0,fit=false;
+  globalThis.fetch=async (_url,init) => {
+    const b=JSON.parse(init.body);
+    if(b.purpose==='delivery-selection'){
+      votes++;
+      if(votes===n+1)assert.deepEqual(b.context.sources.map((s) => s.id),archive.map((s) => s.id));
+      const ids=b.context.sources.length?[votes===n+1?'P3':'P1']:[];
+      return completion(JSON.stringify({projectIds:ids,workIds:[],researchIds:[]}));
+    }
+    if(b.part==='review'){
+      const materials=JSON.parse(deliveryMessages(b,b.context)[1].content.split('\n')[1]).material;
+      assert(!JSON.stringify(materials).includes('辅助背景'));
+      return completion(JSON.stringify({matches:[{jd:'负责用户访谈与需求分析',refs:[materials.find((m)=>m.text===late.facts[0]).ref]}]}));
+    }
+    assert.deepEqual(b.context.sources.map((s)=>s.id),['late']);
+    if(fit){assert(b.brief);assert(b.characters<late.facts[0].length);}
+    return completion(JSON.stringify({rows:[{text:fit?'访谈 12 位创作者。':late.facts[0],refs:[1]}]}));
+  };
+  try{
+    const plan=await runDelivery(input);assert.deepEqual(plan.projectIds,['late']);assert.equal(votes,n+1);
+    fit=true;
+    const shorter=await refitDelivery(input,assembleDelivery(prepared,plan),{lines:36,columns:48},3,input.signal);
+    assert.equal(shorter.changes[0].text,'访谈 12 位创作者。');
+    assert.deepEqual(shorter.requirements,plan.requirements);
+  }finally{globalThis.fetch=old;}
+});
 test("physical space changes the writer's line and section budgets without transmitting the private header", () => {
   const {context, seed} = prepare();
   const small = pageWritingBudget({lines:17,columns:42},context);
