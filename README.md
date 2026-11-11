@@ -30,3 +30,13 @@ npm run build
 - **个人云工作区**：默认开启。生产启动必须提供 PostgreSQL、HTTPS、管理员邮箱及独立密钥。支持邀请登录、账号隔离、冲突恢复、个人模型和独立管理后台。SMTP 可稍后在后台配置；未配置时不开放邮箱验证码登录。
 
 部署说明见 [deploy/README.md](deploy/README.md)，完整账号及安全配置见 [prototype/CLOUD.md](prototype/CLOUD.md)。开发数据、私钥、真实凭据与参考截图不进入仓库。
+
+## 许可与原创署名
+
+Copyright (c) 2026 JimmyZhang06。本仓库由作者提供的原创代码、文档和资源采用 **PolyForm Noncommercial License 1.0.0**，支持协议许可范围内的学习、研究、修改、分享和非商业使用。完整条款见 [LICENSE](LICENSE)。
+
+复制或分发本项目的代码及其修改版时，须按协议保留 [NOTICE](NOTICE) 中的作者署名、原始仓库地址，以及许可证全文或其官方链接。原始仓库为 [JimmyZhang06/profile](https://github.com/JimmyZhang06/profile)。
+
+商业使用需要事先取得作者的书面授权，包括对外收费部署、销售软件或基于本项目提供商业服务等用途。可通过原始仓库的 [Issues](https://github.com/JimmyZhang06/profile/issues) 联系作者，说明使用场景和授权需求。具体许可范围以 LICENSE 和另行取得的书面授权为准。
+
+第三方组件和素材适用其各自的许可证及版权声明。用户自行填写、上传的内容按其各自权利归属处理，用户可正常编辑、导出和投递自己的简历。
