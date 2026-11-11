@@ -51,6 +51,27 @@ export function getProjectBullets(resume, projectId) {
   return resume.projectBullets?.[projectId] ?? resume.sources.find(project => project.id === projectId)?.facts ?? [];
 }
 
+// Keep field identities stable when moving a point. References, formatting,
+// and pending conversation proposals still belong to the same text.
+export function projectPointIndices(resume,id) {
+  const indices = getProjectBullets(resume,id).map((_,i) => i);
+  const order = resume.projectPointOrder?.[id];
+  if (!Array.isArray(order)) return indices;
+  return [...new Set([...order,...indices])].filter((i) => Number.isInteger(i) && i >= 0 && i < indices.length);
+}
+export function validProjectPointOrder(order) {
+  return order === undefined || !!order && typeof order === 'object' && !Array.isArray(order) &&
+    Object.values(order).every((indices) => Array.isArray(indices) && new Set(indices).size === indices.length && indices.every((i) => Number.isSafeInteger(i) && i >= 0));
+}
+export function moveProjectPoint(resume,field,direction) {
+  const [id,key] = field.split(':');
+  if (!resume.projectIds.includes(id) || !/^\d+$/.test(key) || ![1,-1].includes(direction)) return resume;
+  const order = projectPointIndices(resume,id), from = order.indexOf(Number(key)), to = from+direction;
+  if (from < 0 || to < 0 || to >= order.length) return resume;
+  [order[from],order[to]] = [order[to],order[from]];
+  return {...resume,projectPointOrder:{...resume.projectPointOrder,[id]:order}};
+}
+
 export function materialFingerprint(project) {
   if (!project) return '';
   const text = JSON.stringify([project.id, project.name, project.role, project.date, project.tags, project.facts, projectDetails(project)]);
@@ -80,7 +101,8 @@ export function prepareProjectSelection(resume, ids, library, job, { regenerate 
   ]));
   const overrides = Object.fromEntries(Object.entries(resume.overrides).filter(([field]) => {
     const [id, index] = field.split(':');
-    return !regenerate && sources.some(project => project.id === id) && Number(index) < projectBullets[id].length;
+    return sources.some(project => project.id === id) && (['name','role','date'].includes(index) || !regenerate && Number(index) < projectBullets[id].length);
   }));
-  return { ...resume, sources, projectIds: sources.map(project => project.id), projectBullets, overrides };
+  const pointOrder = resume.projectPointOrder && Object.fromEntries(Object.entries(resume.projectPointOrder).filter(([id]) => !regenerate && sources.some(p => p.id === id)));
+  return { ...resume, sources, projectIds: sources.map(project => project.id), projectBullets, overrides, ...(pointOrder ? {projectPointOrder:pointOrder} : {}) };
 }

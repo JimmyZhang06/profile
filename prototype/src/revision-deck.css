@@ -40,3 +40,6 @@
 @media (prefers-reduced-motion: reduce) {
   .revision-deck-viewport { scroll-behavior: auto; }
 }
+.revision-new, .revision-old p { white-space:pre-line; }
+.revision-new ins { background:var(--surface-selected); color:var(--text-strong); text-decoration:none; }
+.revision-old del { text-decoration-thickness:1px; }

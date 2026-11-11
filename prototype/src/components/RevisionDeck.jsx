@@ -3,15 +3,17 @@ import { IconArrowUpRight, IconPencil, IconCheck, IconChevronDown, IconChevronLe
 import { Button, IconButton } from './ui/index.jsx';
 import { fieldLabel, proposalState } from '../lib/workspace.js';
 import { createRevisionScroller } from '../lib/revisionScroll.js';
+import {changedSpan} from '../lib/revisionText.js';
 
 function RevisionCard({ proposal, doc, dismissed, onApply, onDismiss, onSource, onLocate }) {
   const [showBefore, setShowBefore] = useState(false);
   const status = dismissed ? 'dismissed' : proposalState(doc, proposal);
+  const differences = showBefore ? changedSpan(proposal.before,proposal.after) : null;
   return <div className={'revision-card revision-' + status}>
     <div className="revision-heading"><button type="button" onClick={() => onLocate(proposal.field)}><IconPencil size={15} />{fieldLabel(doc.resume, proposal.field)}</button><span className="revision-status">{status === 'applied' ? <><IconCheck size={14} />已采用</> : status === 'stale' ? '原文已更新' : status === 'dismissed' ? '已保留原文' : '待审核'}</span></div>
-    <p className="revision-new">{proposal.after}</p>
+    <p className="revision-new">{differences ? <>{differences.after.lead}<ins>{differences.after.edit}</ins>{differences.after.end}</> : proposal.after}</p>
     <button type="button" className="revision-compare" aria-expanded={showBefore} onClick={() => setShowBefore(!showBefore)}>{showBefore ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}对照原文</button>
-    {showBefore ? <div className="revision-old"><p>{proposal.before || '尚未填写'}</p><small>{proposal.reason}</small></div> : null}
+    {showBefore ? <div className="revision-old"><p>{proposal.before ? <>{differences.before.lead}<del>{differences.before.edit}</del>{differences.before.end}</> : '尚未填写'}</p><small>{proposal.reason}</small></div> : null}
     <div className="revision-footer"><button type="button" className="text-button muted" onClick={() => onSource(proposal.field)}>查看依据<IconArrowUpRight size={13} /></button>{status === 'pending' ? <div><Button variant="ghost" size="small" onClick={onDismiss}>保留原文</Button><Button className="small" onClick={() => onApply(proposal)}>采用<IconCheck size={14} /></Button></div> : status === 'stale' ? <span className="muted small-text">重新生成后再采用</span> : null}</div>
   </div>;
 }

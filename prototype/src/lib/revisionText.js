@@ -7,6 +7,11 @@ export const rewriteDirections = {
 
 const content = (text) => text.normalize('NFKC').toLowerCase().replace(/[\p{P}\p{S}\s]/gu, '');
 export const sameWording = (a,b) => content(a) === content(b);
+export const requestsParagraphs = (prompt) => /拆(?:成|分|为|开)|分(?:行|点|段|条|成|为)|合(?:并|成一)|整理成.{0,4}(条|段|点)/u.test(prompt);
+export function changedParagraphs(before,after) {
+  const lines = (s) => s.split(/\r?\n/).map(content).filter(Boolean);
+  return JSON.stringify(lines(before)) !== JSON.stringify(lines(after));
+}
 
 // Show the actual replacement region, preserving surrounding text on the paper.
 export function changedSpan(before, after) {

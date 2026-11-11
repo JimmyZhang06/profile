@@ -1,13 +1,16 @@
 import { IconLayoutSidebarLeftExpand, IconMaximize, IconMinus, IconPlus, IconTextSize } from '@tabler/icons-react';
 import { IconButton, Menu } from './ui/index.jsx';
 
-export function PreviewControls({ view, onViewChange, readingSize, onReadingSizeChange, zoom, scale, onZoomChange, focus, onFocus, showFocus = true }) {
+export function PreviewControls({ view, onViewChange, readingSize, onReadingSizeChange, zoom, scale, onZoomChange, focus, onFocus, showFocus = true, room, onCheck }) {
   const percentage = Math.round(scale * 100);
   return <footer className="canvas-footer preview-controls" aria-label="预览显示设置">
     <div className="canvas-view-switch" role="group" aria-label="简历显示方式">
       <button type="button" aria-pressed={view === 'read'} onClick={() => onViewChange('read')}>阅读</button>
       <button type="button" aria-pressed={view === 'page'} onClick={() => onViewChange('page')}>A4 预览</button>
     </div>
+    {room && <button type="button" className="editor-fit" onClick={onCheck} title={room.overflowSections.join('、') || '查看投递检查'}>
+      {room.horizontal ? '超出纸宽' : room.overflow ? '超页 ' + Math.ceil(room.overflowMm) + ' mm' : '可排入一页'}
+    </button>}
     <div className="preview-control-group">
       {view === 'read' ? <div className="preview-control-surface" title="调整屏幕阅读字号，导出排版不变">
         <Menu label="阅读字号" className="preview-size-menu opens-up" icon={<IconTextSize size={16} />} value={<span>阅读 <b>{readingSize}</b></span>} items={[14, 15, 16, 17, 18, 20, 22].map(size => ({ label: `阅读字号 · ${size}`, selected: readingSize === size, onClick: () => onReadingSizeChange(size) }))} />

@@ -345,7 +345,7 @@ export function TailorPage({
                 我同意将所选资料发送给「{connection.name}」。{calls.bySection
                   ? '将按经历分段成稿，按入选数量预计不超过 ' + calls.usual + ' 次调用。'
                   : '预计 ' + calls.usual + ' 次调用，整篇回复过长时会自动分段。'}
-                含重试和一页排版调整，本次最多 {calls.maximum} 次。姓名与联系方式在本机排版。
+                纸面有余量时可再调用一次，用入选资料补写亮点。含重试与超页精简，最多 {calls.maximum} 次。姓名与联系方式在本机排版。
               </span>
             </label>
           ) : null}

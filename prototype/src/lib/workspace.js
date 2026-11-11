@@ -1,9 +1,10 @@
 import { initialJob, initialProjects, initialResume } from '../data.js';
-import { buildProjectBullets, getProjectBullets, materialFingerprint, projectDetailFields, projectEvidenceText } from './projects.js';
+import { buildProjectBullets, getProjectBullets, materialFingerprint, projectDetailFields, projectEvidenceText, projectPointIndices, validProjectPointOrder } from './projects.js';
 import { templateDesign, validResumeDesign } from './resumeDesign.js';
 import { formattedMarkdown, marksForField, normalizeMarks, validTextStyles } from './richText.js';
 import { validDelivery } from './deliverySchema.js';
-import { sameWording } from './revisionText.js';
+import { changedParagraphs, sameWording } from './revisionText.js';
+import { addsSupportedDetail, comparable } from './deliveryWording.js';
 import { descriptionFields, findRecordField, profileForResume, profileSnapshot, syncLegacyFields, validProfile, validProfileSections, visibleContacts, visibleRecords } from './profile.js';
 
 export const STORAGE_KEY = 'luli.workspace.v2';
@@ -24,6 +25,7 @@ export function fieldValue(resume, field) {
   if (record) return record.entry[record.key];
   if (!field.includes(':')) return resume[field] || '';
   const [id, index] = field.split(':');
+  if (['name','role','date'].includes(index)) return resume.overrides?.[field] ?? resume.sources?.find((p) => p.id === id)?.[index] ?? '';
   return resume.overrides?.[field] ?? (resume.sources ? getProjectBullets(resume, id)[Number(index)] : '') ?? '';
 }
 export function fieldLabel(resume, field) {
@@ -31,7 +33,10 @@ export function fieldLabel(resume, field) {
   if (record) return [record.entry.organization, record.label].filter(Boolean).join(' · ');
   if (!field?.includes(':')) return fieldLabels[field] || '简历内容';
   const [id, index] = field.split(':');
-  return (resume.sources.find(p => p.id === id)?.name || '项目') + ' · 第 ' + (Number(index) + 1) + ' 条';
+  const identityLabel = {name:'项目名称',role:'项目角色',date:'项目时间'}[index];
+  if (identityLabel) return identityLabel;
+  const position = projectPointIndices(resume,id).indexOf(Number(index));
+  return (fieldValue(resume,id+':name') || '项目') + ' · 第 ' + (position >= 0 ? position + 1 : Number(index) + 1) + ' 条';
 }
 export function setField(resume, field, value, marks) {
   const record = findRecordField(resume, field);
@@ -64,7 +69,7 @@ export function initialWorkspace() {
 export function validWorkspace(value) {
   const string = v => typeof v === 'string';
   const project = p => p && string(p.id) && string(p.name) && string(p.role) && string(p.date) && Array.isArray(p.facts) && p.facts.every(string) && Array.isArray(p.tags) && p.tags.every(string) && (p.details === undefined || (p.details && typeof p.details === 'object' && !Array.isArray(p.details) && projectDetailFields.every(({ key }) => p.details[key] === undefined || string(p.details[key]))));
-  const resume = r => r && validProfileSections(r) && (r.profileSource === undefined || validProfile(r.profileSource)) && Array.isArray(r.sources) && r.sources.every(project) && Array.isArray(r.projectIds) && r.projectIds.every(id => r.sources.some(p => p.id === id)) && (r.projectBullets === undefined || (r.projectBullets && typeof r.projectBullets === 'object' && !Array.isArray(r.projectBullets) && Object.values(r.projectBullets).every(points => Array.isArray(points) && points.every(string)))) && r.overrides && Object.values(r.overrides).every(string) && Object.keys(fieldLabels).every(key => r[key] === undefined || string(r[key])) && validResumeDesign(r.design) && validTextStyles(r.textStyles);
+  const resume = r => r && validProfileSections(r) && validProjectPointOrder(r.projectPointOrder) && (r.profileSource === undefined || validProfile(r.profileSource)) && Array.isArray(r.sources) && r.sources.every(project) && Array.isArray(r.projectIds) && r.projectIds.every(id => r.sources.some(p => p.id === id)) && (r.projectBullets === undefined || (r.projectBullets && typeof r.projectBullets === 'object' && !Array.isArray(r.projectBullets) && Object.values(r.projectBullets).every(points => Array.isArray(points) && points.every(string)))) && r.overrides && Object.values(r.overrides).every(string) && Object.keys(fieldLabels).every(key => r[key] === undefined || string(r[key])) && validResumeDesign(r.design) && validTextStyles(r.textStyles);
   const job = j => j && ['company', 'title', 'text'].every(key => string(j[key]));
   const message = m => m && string(m.id) && ['assistant', 'user'].includes(m.role) && string(m.text) && (!m.proposals || (Array.isArray(m.proposals) && m.proposals.every(p => p && ['id', 'field', 'before', 'after', 'jobText'].every(key => string(p[key]))))) && (!m.dismissed || (Array.isArray(m.dismissed) && m.dismissed.every(string)));
   return value?.schema === 2 && Array.isArray(value.documents) && value.documents.length > 0 && value.documents.every(d => validDelivery(d.delivery) && (d.archived === undefined || typeof d.archived === 'boolean') && (d.archivedAt === undefined || Number.isFinite(d.archivedAt)) && string(d.id) && string(d.title) && job(d.job) && resume(d.resume) && Array.isArray(d.messages) && d.messages.every(message) && Array.isArray(d.versions) && d.versions.every(v => string(v.id) && string(v.name) && resume(v.resume)) && Array.isArray(d.undo) && d.undo.every(v => resume(v.resume)) && Array.isArray(d.redo) && d.redo.every(v => resume(v.resume))) && Array.isArray(value.library) && value.library.every(project) && validProfile(value.profile) && typeof value.settings?.enabled === 'boolean' && value.settings?.capabilities && value.settings?.bindings && Array.isArray(value.settings.connections) && value.settings.connections.every(c => c && ['id', 'name', 'model', 'baseUrl'].every(key => string(c[key])) && !('apiKey' in c)) && Number.isFinite(value.ui?.chatRatio) && value.ui.chatRatio >= MIN_CHAT_RATIO && value.ui.chatRatio <= MAX_CHAT_RATIO && value.documents.some(d => d.id === value.activeId);
@@ -79,6 +84,18 @@ export function undoDocument(doc, redo = false) {
   if (!item) return doc;
   return { ...doc, resume: clone(item.resume), revision: doc.revision + 1, updatedAt: Date.now(), [from]: doc[from].slice(0, -1), [to]: [...doc[to], { resume: clone(doc.resume), label: item.label }] };
 }
+// Persist every committed editor transaction, but keep one document undo
+// step for a continuous visit to a field. A concurrent field edit wins.
+export function editManuscript(doc, session, value, marks) {
+  const last = doc.undo.at(-1);
+  if (last?.editSession !== session.id && fieldValue(doc.resume,session.field) !== session.initial) return doc;
+  const resume = setField(doc.resume,session.field,value,marks);
+  if (value === fieldValue(doc.resume,session.field) && JSON.stringify(resume.textStyles) === JSON.stringify(doc.resume.textStyles)) return doc;
+  if (last?.editSession === session.id) return {...doc,resume,revision:doc.revision+1,updatedAt:Date.now(),redo:[]};
+  const next = mutateResume(doc,resume,'编辑'+fieldLabel(resume,session.field));
+  next.undo[next.undo.length-1] = {...next.undo.at(-1),editSession:session.id};
+  return next;
+}
 export function proposalState(doc, proposal) {
   const current = fieldValue(doc.resume, proposal.field);
   if (current === proposal.after) return 'applied';
@@ -90,7 +107,7 @@ export function acceptedProposal(doc, proposal) {
   if (proposalState(doc, proposal) !== 'pending') return doc;
   return mutateResume(doc, setField(doc.resume, proposal.field, proposal.after), '采用建议');
 }
-export function validateSuggestions(items, doc) {
+export function validateSuggestions(items, doc, {paragraphs = false, selected, supplied, context} = {}) {
   const sources = doc.resume.sources.filter(p => doc.resume.projectIds.includes(p.id));
   const allowed = new Set(assistantFieldIds(doc.resume));
   const seen = new Set();
@@ -100,9 +117,21 @@ export function validateSuggestions(items, doc) {
     const evidence = record ? record.entry.description : p.field.includes(':')
       ? projectEvidenceText(sources.find(source => source.id === p.field.split(':')[0]))
       : ['summary', 'experience', 'skills', ...descriptionFields(doc.resume)].map(key => fieldValue(doc.resume, key)).join(' ') + sources.map(projectEvidenceText).join(' ');
-    const numbers = new Set((evidence + ' ' + fieldValue(doc.resume, p.field)).match(/\d+(?:\.\d+)?/g) || []);
+    const addition = p.field === selected && supplied ? supplied : '';
+    const numbers = new Set((evidence + ' ' + fieldValue(doc.resume, p.field) + ' ' + addition).match(/\d+(?:\.\d+)?/g) || []);
     if ((p.after.match(/\d+(?:\.\d+)?/g) || []).some(n => !numbers.has(n))) return false;
-    if (sameWording(p.after, fieldValue(doc.resume, p.field))) return false;
+    const before = fieldValue(doc.resume,p.field);
+    if (sameWording(p.after,before) && !(paragraphs && changedParagraphs(before,p.after))) return false;
+    const original = comparable(before), replacement = comparable(p.after);
+    if (original.length >= 10 && replacement !== original && replacement.includes(original)) {
+      const owner = p.field.includes(':') ? p.field.split(':')[0] : null;
+      const facts = context ? [
+        ...context.fields.filter((f) => !owner || f.id.split(':')[0] === owner).map((f) => f.text),
+        ...context.sources.filter((s) => !owner || s.id === owner).flatMap((s) => [...s.facts,...Object.entries(s.details || {})
+          .filter(([key]) => !['notes','goals','reflection'].includes(key)).map(([,v]) => v)]),
+      ] : [evidence];
+      if (!addsSupportedDetail(before,p.after,[...facts,addition].filter(Boolean).map((quote) => ({quote})))) return false;
+    }
     seen.add(p.field); return true;
   }).map(p => ({ id: uid(), field: p.field, before: fieldValue(doc.resume, p.field), after: p.after.trim(), reason: String(p.reason || '根据当前经历调整表达').slice(0, 600), jobText: doc.job.text, sourceFingerprint: sourceFingerprint(doc, p.field) }));
 }
@@ -118,17 +147,21 @@ export function assistantFieldIds(resume) {
 export function toMarkdown(doc) {
   const r = doc.resume;
   const text = field => { const value = fieldValue(r, field); return formattedMarkdown(value, marksForField(r, field, value)); };
-  const records = (key, title) => visibleRecords(r, key).length ? ['', '## ' + title, ...visibleRecords(r, key).flatMap(entry => ['### ' + text(entry.id + ':organization') + (entry.title ? ' · ' + text(entry.id + ':title') : ''), text(entry.id + ':period'), text(entry.id + ':description'), ''])] : [];
+  const points = (value) => value.split('\n').filter(Boolean).map((line) => '- ' + line).join('\n');
+  const records = (key, title) => visibleRecords(r, key).length ? ['', '## ' + title, ...visibleRecords(r, key).flatMap(entry => {
+    const body = text(entry.id+':description');
+    return ['### ' + text(entry.id + ':organization') + (entry.title ? ' · ' + text(entry.id + ':title') : ''), text(entry.id + ':period'), key !== 'educationEntries' && body.includes('\n') ? points(body) : body, ''];
+  })] : [];
   const contact = Array.isArray(r.contactItems) ? visibleContacts(r).map(item => (item.label ? formattedMarkdown(item.label) + '：' : '') + text(item.id + ':value')).join(' | ') : text('contact');
   if (r.sectionOrder === 'application') {
     const projectLines = r.projectIds.flatMap(id => {
       const p = r.sources.find(s => s.id === id);
-      return p ? ['### ' + formattedMarkdown(p.name) + (p.role ? ' · ' + formattedMarkdown(p.role) : ''), formattedMarkdown(p.date), ...getProjectBullets(r, id).map((_, i) => text(id + ':' + i)).filter(Boolean).map(value => '- ' + value), ''] : [];
+      return p ? ['### ' + text(id+':name') + (text(id+':role') ? ' · ' + text(id+':role') : ''), text(id+':date'), ...projectPointIndices(r,id).map((i) => points(text(id+':'+i))).filter(Boolean), ''] : [];
     });
     return ['# ' + text('name'), text('target'), contact, ...(text('summary') ? ['', '## 个人简介', text('summary')] : []), ...records('educationEntries', '教育背景'), ...records('workEntries', '实习与工作经历'), ...(projectLines.length ? ['', '## 项目经历', ...projectLines] : []), ...records('researchEntries', '研究经历'), ...(text('skills') ? ['', '## 专业能力', text('skills')] : [])].join('\n');
   }
   return ['# ' + (text('name') || '姓名'), text('target'), contact, '', '## 个人简介', text('summary'), '', '## 项目经历', ...r.projectIds.flatMap(id => {
-    const p = r.sources.find(s => s.id === id); return p ? ['### ' + formattedMarkdown(p.name) + ' · ' + formattedMarkdown(p.role), formattedMarkdown(p.date), ...getProjectBullets(r, id).map((_, i) => text(id + ':' + i)).filter(Boolean).map(value => '- ' + value), ''] : [];
+    const p = r.sources.find(s => s.id === id); return p ? ['### ' + text(id+':name') + ' · ' + text(id+':role'), text(id+':date'), ...projectPointIndices(r,id).map((i) => points(text(id+':'+i))).filter(Boolean), ''] : [];
   }), ...records('researchEntries', '研究经历'), ...(Array.isArray(r.workEntries) ? records('workEntries', '实习与工作经历') : ['## 工作经历', text('company') + ' · ' + text('period'), text('experience')]), ...(Array.isArray(r.educationEntries) ? records('educationEntries', '教育背景') : ['', '## 教育背景', text('school') + ' · ' + text('educationPeriod'), text('major')]), '', '## 专业能力', text('skills')].join('\n');
 }
 export function downloadFile(name, text, type = 'text/plain;charset=utf-8') {

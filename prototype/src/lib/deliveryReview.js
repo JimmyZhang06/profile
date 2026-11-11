@@ -1,5 +1,5 @@
 import {contactLabel, newContact, newRecord, normalizeProfile, recordSections, syncLegacyFields, visibleRecords} from './profile.js';
-import {getProjectBullets} from './projects.js';
+import {getProjectBullets,projectPointIndices} from './projects.js';
 import {fieldLabel, fieldValue, setField} from './workspace.js';
 
 const headerTypes = {email: '邮箱', phone: '电话', availability: '到岗与实习安排'};
@@ -36,7 +36,7 @@ export function reviewFields(r) {
       for (const key of ['company', 'period', 'experience']) add(key, fieldLabel(r, key));
   }
   for (const id of r.projectIds)
-    for (let i = 0; i < Math.max(1, getProjectBullets(r, id).length); i++)
+    for (const i of (getProjectBullets(r,id).length ? projectPointIndices(r,id) : [0]))
       add(id + ':' + i, fieldLabel(r, id + ':' + i));
   add('skills', '专业能力');
   return options;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { IconArrowLeft, IconCheck, IconEye, IconMenu2, IconX } from '@tabler/icons-react';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Chat } from './components/Chat.jsx';
@@ -8,20 +8,19 @@ import { WorkspaceHeader } from './components/WorkspaceHeader.jsx';
 import { SplitWorkspace } from './components/SplitWorkspace.jsx';
 import { JobPage, NewDocumentPage, SettingsPage, VersionsPage, ReviewPage, SourcePage, RenamePage } from './components/Pages.jsx';
 import { TailorPage } from './components/TailorPage.jsx';
-import { DeliveryExportPage } from './components/DeliveryExportPage.jsx';
 import { LibraryPage } from './components/LibraryPage.jsx';
 import { SelectedExperiencePage } from './components/ExperiencePreview.jsx';
 import { DeleteDocumentPage, DocumentTrashPage, EmptyDocuments } from './components/DocumentTrash.jsx';
-import { Button, IconButton } from './components/ui/index.jsx';
+import { Button, IconButton, Page } from './components/ui/index.jsx';
 import { AccountPage } from './components/account/AccountPage.jsx';
 import { cloudRequest } from './lib/cloudClient.js';
 import { useTheme } from './hooks/useTheme.js';
 import { useMediaQuery } from './hooks/useMediaQuery.js';
 import { PageNavigationContext, usePageNavigation } from './hooks/usePageNavigation.js';
-import { acceptedProposal, clone, downloadFile, fieldLabel, fieldValue, makeDocument, mutateResume, proposalState, setField, uid, undoDocument, validWorkspace } from './lib/workspace.js';
+import { acceptedProposal, assistantFieldIds, clone, downloadFile, editManuscript, fieldLabel, fieldValue, makeDocument, mutateResume, proposalState, uid, undoDocument, validWorkspace } from './lib/workspace.js';
 import { runAssistant } from './lib/assistant.js';
 import { createTypewriter } from './lib/typewriter.js';
-import { prepareProjectSelection } from './lib/projects.js';
+import { moveProjectPoint, prepareProjectSelection } from './lib/projects.js';
 import { marksForField } from './lib/richText.js';
 import { mergeImportedWorkspace } from './lib/cloudWorkspace.js';
 import { applyProfileSelection, profileHasContent } from './lib/profile.js';
@@ -29,6 +28,8 @@ import { getResumeDesign } from './lib/resumeDesign.js';
 import { chatDeliveryJob, jobFromFragment } from './lib/deliverySelection.js';
 import { reviewValue, setReviewValue } from './lib/deliveryReview.js';
 import { activeDocument, moveDocumentToTrash, restoreDocument } from './lib/documents.js';
+
+const DeliveryExportPage = lazy(() => import('./components/DeliveryExportPage.jsx').then((m) => ({default:m.DeliveryExportPage})));
 
 export function App({ workspace, account }) {
   const theme = useTheme();
@@ -48,7 +49,7 @@ export function App({ workspace, account }) {
     if (incomingJob && window.location.hash.startsWith('#tailor?'))
       window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
   }, [incomingJob]);
-  const [selected, setSelected] = useState(null), [edit, setEdit] = useState(null), [focus, setFocus] = useState(false), [mobileView, setMobileView] = useState('chat'), [busyId, setBusyId] = useState(null), [toast, setToast] = useState(''), [focusKey, setFocusKey] = useState(0);
+  const [selected, setSelected] = useState(null), [edit, setEdit] = useState(null), [focus, setFocus] = useState(false), [mobileView, setMobileView] = useState(() => doc.delivery ? 'document' : 'chat'), [busyId, setBusyId] = useState(null), [toast, setToast] = useState(''), [focusKey, setFocusKey] = useState(0);
   const [designOpen, setDesignOpen] = useState(false);
   const [mobileDesignPreview, setMobileDesignPreview] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
@@ -70,10 +71,13 @@ export function App({ workspace, account }) {
   const task = useRef(null), timer = useRef(null), workArea = useRef(null), latest = useRef(state);
   latest.current = state;
   const enabled = state.settings.enabled && state.settings.capabilities.rewrite;
+  const preferredChat = doc.chatConnectionId ?? (doc.delivery?.mode === 'local' ? 'offline' : doc.delivery?.modelId);
+  const chatSettings = preferredChat ? {...state.settings, bindings:{...state.settings.bindings,
+    rewrite: state.settings.connections.some((c) => c.id === preferredChat && c.enabled !== false) ? preferredChat : 'offline'}} : state.settings;
   const updateDoc = (id, change) => setState(s => ({ ...s, documents: s.documents.map(d => d.id === id && !d.archived ? change(d) : d) }));
   const changeDoc = change => updateDoc(doc.id, change);
   function notify(message) { clearTimeout(timer.current); setToast(message); timer.current = setTimeout(() => setToast(''), 4200); }
-  function guard() { if (edit) { notify('请先保存或取消正在编辑的文字'); return false; } if (conflict) return false; return true; }
+  function guard() { if (conflict) return false; if (edit) setEdit(null); return true; }
   function closeMobileNavigation() { setMobileNavigationOpen(false); }
   function openNavigation() { navigationTrigger.current = document.activeElement; setMobileNavigationOpen(true); }
   useEffect(() => {
@@ -160,9 +164,13 @@ export function App({ workspace, account }) {
       finish('tailor');
       return;
     }
-    const id = retry?.id || uid(), controller = new AbortController(), requestDoc = clone(prepared || doc), requestSelection = prepared ? null : retry?.selectedField || selected;
-    const snapshot = { id, role: 'assistant', status: 'streaming', text: '', prompt: text, selectedField: requestSelection, offline: state.settings.bindings.rewrite === 'offline', materialOptimization: !!materialApproval };
-    const user = { id: uid(), role: 'user', status: 'done', text, materialOptimization: !!materialApproval, selected: requestSelection ? { field: requestSelection, label: fieldLabel(doc.resume, requestSelection) } : null };
+    const id = retry?.id || uid(), controller = new AbortController(), requestDoc = clone(prepared || doc);
+    const choice = prepared ? null : retry?.selectedField || selected;
+    const requestSelection = assistantFieldIds(requestDoc.resume).includes(choice) ? choice : null;
+    const settings = chatSettings;
+    const connectionId = settings.bindings.rewrite;
+    const snapshot = { id, role: 'assistant', status: 'streaming', text: '', prompt: text, selectedField: requestSelection, offline: connectionId === 'offline', connectionId, materialOptimization: !!materialApproval };
+    const user = { id: uid(), role: 'user', status: 'done', text, connectionId, materialOptimization: !!materialApproval, selected: requestSelection ? { field: requestSelection, label: fieldLabel(doc.resume, requestSelection) } : null };
     task.current = { controller, messageId: id, docId: doc.id }; setBusyId(doc.id);
     changeDoc(d => ({ ...d, composer: retry ? d.composer : '', updatedAt: Date.now(), messages: retry ? d.messages.map(m => m.id === id ? snapshot : m) : [...d.messages, user, snapshot] }));
     requestDoc.messages = requestDoc.messages.filter(m => m.id !== id);
@@ -174,7 +182,7 @@ export function App({ workspace, account }) {
       },
     });
     try {
-      const result = await runAssistant({ prompt: text, doc: requestDoc, selected: requestSelection, library: state.library, settings: { ...state.settings, cloudAccount: workspace.cloud ? account.owner.id : null }, materialApproval, signal: controller.signal, onText: writer.push });
+      const result = await runAssistant({ prompt: text, doc: requestDoc, selected: requestSelection, library: state.library, settings: { ...settings, cloudAccount: workspace.cloud ? account.owner.id : null }, materialApproval, signal: controller.signal, onText: writer.push });
       await writer.finish(result.text);
       if (controller.signal.aborted || task.current?.controller !== controller) return;
       updateDoc(requestDoc.id, d => ({ ...d, updatedAt: Date.now(), messages: d.messages.map(m => m.id === id ? { ...m, ...result, status: 'done' } : m) }));
@@ -185,7 +193,7 @@ export function App({ workspace, account }) {
   function selectDocument(id, destination = null) {
     closeMobileNavigation();
     if (!guard() || !state.documents.some(d => d.id === id && !d.archived)) return;
-    request(() => { stop(); setState(s => ({ ...s, activeId: id })); setSelected(null); setEdit(null); setFocus(false); setDesignOpen(false); setMobileView('chat'); finish(destination); });
+    request(() => { stop(); setState(s => ({ ...s, activeId: id })); setSelected(null); setEdit(null); setFocus(false); setDesignOpen(false); setMobileView(state.documents.find((d) => d.id === id)?.delivery ? 'document' : 'chat'); finish(destination); });
   }
   function trashCurrentDocument() {
     if (!currentDoc || !guard()) return;
@@ -200,8 +208,25 @@ export function App({ workspace, account }) {
     notify('简历已恢复，正文、对话和版本记录均保留');
   }
   function selectField(field) { if (!guard()) return; setSelected(field); }
-  function startEdit(field) { if (!guard()) return; const value = fieldValue(doc.resume, field); setSelected(field); setEdit({ field, value, marks: marksForField(doc.resume, field, value) }); }
-  function saveEdit() { if (!edit) return; changeDoc(d => mutateResume(d, setField(d.resume, edit.field, edit.value, edit.marks), '编辑' + fieldLabel(d.resume, edit.field))); setEdit(null); notify('文字与格式已保存'); }
+  function startEdit(field) {
+    if (!guard()) return;
+    const value = fieldValue(doc.resume,field);
+    setSelected(field); setEdit({id:uid(),field,initial:value,value,marks:marksForField(doc.resume,field,value)});
+  }
+  function updateEdit(draft) {
+    if (!edit || conflict) return;
+    changeDoc((d) => editManuscript(d,edit,draft.value,draft.marks));
+    setEdit((e) => e?.id === edit.id ? {...e,...draft} : e);
+  }
+  function cancelEdit() {
+    if (edit && !conflict) changeDoc((d) => d.undo.at(-1)?.editSession === edit.id ? undoDocument(d) : d);
+    setEdit(null);
+  }
+  function finishDelivery(next) {
+    stop(); setState((s) => ({...s,documents:[...s.documents,next],activeId:next.id}));
+    setTailorJob(null); setTailorOptions(null); setSelected(null); setEdit(null); setFocus(false); setDesignOpen(false);
+    setMobileView('document'); finish(null); notify('一页草稿已生成，点正文即可编辑');
+  }
   function changeDesign(design) { if (guard() && JSON.stringify(design) !== JSON.stringify(getResumeDesign(doc.resume))) changeDoc(d => mutateResume(d, { ...d.resume, design }, '调整排版与模板')); }
   function closeDesign() { if (!guard()) return; setDesignOpen(false); workArea.current?.querySelector(isMobile ? '.mobile-design-tab' : '.workspace-design-toggle')?.focus({ preventScroll: true }); }
   function toggleDesign() { if (designOpen) closeDesign(); else if (guard()) { setDesignOpen(true); setMobileDesignPreview(false); setMobileView('document'); } }
@@ -230,7 +255,10 @@ export function App({ workspace, account }) {
     if (message.materialOptimization) { open('projects'); notify('这条回复使用了详细素材，请重新确认模型和本次发送范围'); }
     else send(message.prompt, message);
   }
-  function changeModel(id) { stop(); setState(s => ({ ...s, settings: { ...s.settings, enabled: true, capabilities: { ...s.settings.capabilities, rewrite: true }, bindings: { ...s.settings.bindings, rewrite: id } } })); }
+  function changeModel(id) {
+    stop(); setState(s => ({...s,documents:doc.delivery ? s.documents.map((d) => d.id === doc.id ? {...d,chatConnectionId:id} : d) : s.documents,
+      settings:{...s.settings,enabled:true,capabilities:{...s.settings.capabilities,rewrite:true},bindings:doc.delivery ? s.settings.bindings : {...s.settings.bindings,rewrite:id}}}));
+  }
   function importBackup(backup) {
     if (!validWorkspace(backup)) throw new Error('不是可识别的履历备份文件');
     const incoming = {...clone(backup), documents: backup.documents.map(d => ({...clone(d), title: d.title + '（导入）'}))};
@@ -286,15 +314,15 @@ export function App({ workspace, account }) {
       <div className="editor-workspace" hidden={!!page || !currentDoc} inert={conflict || undefined}>
       <WorkspaceHeader doc={doc} saveState={saveState} edit={edit} isMobile={isMobile} mobileView={mobileView} onMobileView={view => { if (guard()) { setDesignOpen(false); setMobileView(view); } }} onNavigation={openNavigation} onOpen={open} onUndo={() => changeDoc(d => undoDocument(d))} onRedo={() => changeDoc(d => undoDocument(d, true))} designOpen={designOpen} onDesignToggle={toggleDesign} />
       <SplitWorkspace ratio={state.ui.chatRatio} onRatioChange={chatRatio => setState(s => ({ ...s, ui: { ...s.ui, chatRatio } }))} mobileDesignPreview={mobileDesignPreview} inert={conflict || undefined} tools={designOpen ? <ResumeDesignPanel catalog={catalog} resume={doc.resume} disabled={!!edit} onChange={changeDesign} onClose={closeDesign} /> : null}>
-        <Chat active={!page && !!currentDoc && !designOpen} doc={doc} settings={state.settings} selected={selected} busy={busyId === doc.id} focusKey={focusKey} onSend={send} onStop={stop} onInput={text => changeDoc(d => ({ ...d, composer: text }))} onRemoveSelection={() => selectField(null)} onOpen={open} onApply={apply} onDismiss={(id, proposalId) => changeDoc(d => ({ ...d, messages: d.messages.map(m => m.id === id ? { ...m, dismissed: [...(m.dismissed || []), proposalId] } : m) }))} onSource={field => { if (guard()) { setSelected(field); finish('source'); } }} onLocate={locate} onCopy={copy} onRetry={retryMessage} onModel={changeModel} />
-        <Canvas active={!page && !!currentDoc} doc={doc} selected={selected} edit={edit} onSelect={selectField} onEdit={startEdit} onEditChange={draft => setEdit(e => ({ ...e, ...draft }))} onSaveEdit={saveEdit} onCancelEdit={() => setEdit(null)} onAsk={field => { setSelected(field); setDesignOpen(false); setFocus(false); setMobileView('chat'); setFocusKey(k => k + 1); }} onSource={field => { setSelected(field); open('source'); }} onOpen={open} focus={focus} onFocus={() => setFocus(!focus)} enabled={enabled} designOpen={designOpen} />
+        <Chat active={!page && !!currentDoc && !designOpen} doc={doc} settings={chatSettings} selected={selected} busy={busyId === doc.id} focusKey={focusKey} onSend={send} onStop={stop} onInput={text => changeDoc(d => ({ ...d, composer: text }))} onRemoveSelection={() => selectField(null)} onOpen={open} onApply={apply} onDismiss={(id, proposalId) => changeDoc(d => ({ ...d, messages: d.messages.map(m => m.id === id ? { ...m, dismissed: [...(m.dismissed || []), proposalId] } : m) }))} onSource={field => { if (guard()) { setSelected(field); finish('source'); } }} onLocate={locate} onCopy={copy} onRetry={retryMessage} onModel={changeModel} />
+        <Canvas key={doc.id} active={!page && !!currentDoc} doc={doc} selected={selected} edit={edit} onSelect={selectField} onEdit={startEdit} onMovePoint={direction => { if (guard()) changeDoc(d => mutateResume(d,moveProjectPoint(d.resume,selected,direction),'调整项目要点顺序')); }} onEditChange={updateEdit} onSaveEdit={() => setEdit(null)} onCancelEdit={cancelEdit} onAsk={field => { setEdit(null); setSelected(field); setDesignOpen(false); setFocus(false); setMobileView('chat'); setFocusKey(k => k + 1); }} onSource={field => { setSelected(field); open('source'); }} onOpen={open} focus={focus} onFocus={() => setFocus(!focus)} enabled={enabled} designOpen={designOpen} />
       </SplitWorkspace>
       {designOpen && !edit ? <footer className="mobile-design-actions"><Button variant="secondary" onClick={() => setMobileDesignPreview(value => !value)}>{mobileDesignPreview ? <IconArrowLeft size={17} /> : <IconEye size={17} />}{mobileDesignPreview ? '返回设置' : '预览效果'}</Button><Button onClick={closeDesign}><IconCheck size={17} />完成排版</Button></footer> : null}
       </div>
       <div className="workspace-page-host" hidden={!page} inert={conflict || undefined}>
     {page === 'delete' && currentDoc ? <DeleteDocumentPage doc={doc} onBack={() => navigate(null)} onConfirm={trashCurrentDocument} /> : null}
     {page === 'trash' ? <DocumentTrashPage documents={state.documents} onBack={() => navigate(null)} onRestore={restoreDeletedDocument} /> : null}
-    {['library', 'profile', 'projects'].includes(page) ? <LibraryPage hasActiveDocument={!!currentDoc} key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{hasActiveDocument: !!currentDoc, busy: !!busyId, settings: state.settings, onOpenJob: () => open('job'), onConfigure: () => open('settings'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}
+    {['library', 'profile', 'projects'].includes(page) ? <LibraryPage hasActiveDocument={!!currentDoc} key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{hasActiveDocument: !!currentDoc, busy: !!busyId, settings: chatSettings, onOpenJob: () => open('job'), onConfigure: () => open('settings'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}
     {page === 'job' ? <JobPage onTailor={job => { setTailorOptions(null); setTailorJob(job); stop(); finish('tailor'); }} job={doc.job} onBack={() => navigate(null)} onSave={(job, next = null) => { stop(); changeDoc(d => ({ ...d, job, title: d.title === d.job.title + ' · 定向简历' ? job.title + ' · 定向简历' : d.title, resume: { ...d.resume, target: d.resume.target === d.job.title ? job.title : d.resume.target }, updatedAt: Date.now() })); finish(next); notify('目标岗位已更新'); }} /> : null}
     {page === 'new' ? <NewDocumentPage initialJob={tailorJob} onTailor={job => { setTailorOptions(null); setTailorJob(job); finish('tailor'); }} profile={state.profile} library={state.library} onBack={() => navigate('tailor')} onCreate={(job, projects, personalProfile) => { stop(); const next = makeDocument({ job, projects, profile: personalProfile || state.profile }); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); finish(null); setSelected(null); setFocus(false); setMobileView('chat'); notify('新简历已创建'); }} /> : null}
     {page === 'settings' ? <SettingsPage theme={theme} modelServiceAvailable={account?.health?.cloudEnabled !== false && (account?.health?.mode !== 'production' || workspace.cloud)} cloudAccount={workspace.cloud ? account.owner.id : null} state={state} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSave={settings => { stop(); setState(s => ({ ...s, settings })); finish(tailorOptions ? 'tailor' : null); notify('设置已保存'); }} notify={notify} onImport={importBackup} /> : null}
@@ -302,8 +330,8 @@ export function App({ workspace, account }) {
     {page === 'review' ? <ReviewPage doc={doc} onBack={() => navigate(null)} onApply={apply} onLocate={locate} /> : null}
     {page === 'source' ? <SourcePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}
     {page === 'experience' ? <SelectedExperiencePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}
-    {page === 'tailor' ? <TailorPage example={sampleProfile} key={(account.owner?.id || 'local') + ':' + tailorInstance} job={tailorJob || currentDoc?.job} profile={hasProfile || (doc.example && !sampleProfile) ? state.profile : doc.resume} library={state.library} settings={{ ...state.settings, ...(workspace.cloud ? { cloudAccount: account.owner.id } : {}) }} onBack={() => navigate(tailorReturn)} onManual={(job, options) => visitFromTailor('new', job, options)} savedOptions={tailorOptions} defaultAvailability={reviewValue(state.profile, '@availability')} onRememberAvailability={hasProfile || !profileHasContent(doc.resume) ? rememberAvailability : undefined} sessionExpired={workspace.cloud && (saveState === 'expired' || !account.user)} onConfigure={(job, options) => visitFromTailor('settings', job, options)} onLibrary={(job, options) => visitFromTailor('library', job, options)} onReady={next => { stop(); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); setTailorJob(null); setTailorOptions(null); setSelected(null); setDesignOpen(false); setMobileView('document'); finish('export'); notify('已生成独立草稿，请核对纸面效果与事实依据'); }} /> : null}
-    {page === 'export' ? <DeliveryExportPage key={doc.id} doc={doc} settings={{...state.settings, ...(workspace.cloud ? {cloudAccount:account.owner.id} : {})}} onSave={saveReviewedResume} onUndo={() => changeDoc(d => undoDocument(d))} onBack={() => navigate(null)} onTailor={() => open('tailor')} notify={notify} /> : null}
+    {page === 'tailor' ? <TailorPage example={sampleProfile} key={(account.owner?.id || 'local') + ':' + tailorInstance} job={tailorJob || currentDoc?.job} profile={hasProfile || (doc.example && !sampleProfile) ? state.profile : doc.resume} library={state.library} settings={{ ...state.settings, ...(workspace.cloud ? { cloudAccount: account.owner.id } : {}) }} onBack={() => navigate(tailorReturn)} onManual={(job, options) => visitFromTailor('new', job, options)} savedOptions={tailorOptions} defaultAvailability={reviewValue(state.profile, '@availability')} onRememberAvailability={hasProfile || !profileHasContent(doc.resume) ? rememberAvailability : undefined} sessionExpired={workspace.cloud && (saveState === 'expired' || !account.user)} onConfigure={(job, options) => visitFromTailor('settings', job, options)} onLibrary={(job, options) => visitFromTailor('library', job, options)} onReady={finishDelivery} /> : null}
+    {page === 'export' ? <Suspense fallback={<Page title="正在打开一页校稿" onBack={() => navigate(null)} />}><DeliveryExportPage key={doc.id} doc={doc} settings={{...chatSettings, ...(workspace.cloud ? {cloudAccount:account.owner.id} : {})}} onSave={saveReviewedResume} onUndo={() => changeDoc(d => undoDocument(d))} onBack={() => navigate(null)} onTailor={() => open('tailor')} notify={notify} /></Suspense> : null}
     {page === 'rename' ? <RenamePage key={doc.id} doc={doc} onBack={() => navigate(null)} onSave={title => { changeDoc(d => ({ ...d, title })); finish(null); }} /> : null}
       </div>
       </div>

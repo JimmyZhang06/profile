@@ -69,14 +69,20 @@ function reviewContext(context, changes) {
 
 function readRows(rows, task, selection, table) {
   const review = task.kind === 'review';
-  const maxRows = review ? 2 : task.kind === 'project' ? 3 : 1;
+  const maxRows = review ? 2 : 3;
   if (!Array.isArray(rows) || rows.length > maxRows || (!review && !rows.length))
     throw new Error('这一段没有返回完整的正文，未写入简历。');
-  return rows.map((row, index) => {
+  const points = rows.map((row, index) => {
     if (review && !['summary','skills'].includes(row?.field)) throw new Error('校对结果包含未允许的字段。');
     const field = review ? row.field : task.id + (task.kind === 'project' ? ':' + index : ':description');
-    return validatedChange({field, text:row?.text, compact:row?.compact, expanded:row?.expanded, evidence:evidenceFor(row?.refs,table)},selection);
-  });
+    return validatedChange({field, text:row?.text, compact:row?.compact, expanded:row?.expanded, evidence:evidenceFor(row?.refs,table)},selection,!review);
+  }).filter(Boolean);
+  if (!review && !points.length) throw new Error('这段经历只有审阅说明，缺少能写入正文的行动。');
+  if (task.kind === 'project') points.forEach((p,i) => {p.field = task.id+':'+i;});
+  if (review || task.kind === 'project' || points.length === 1) return points;
+  const unique = new Map(points.flatMap((p) => p.evidence).map((e) => [JSON.stringify([e.source,e.quote]),e]));
+  return [validatedChange({field:points[0].field, text:points.map((p) => p.text).join('\n'),
+    compact:points.map((p) => p.compact).join('\n'), evidence:[...unique.values()]},selection)];
 }
 
 export function pickedLists(context, chosen) {

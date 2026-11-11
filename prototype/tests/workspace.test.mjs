@@ -5,6 +5,48 @@ import { once } from 'node:events';
 import { initialWorkspace, mutateResume, setField, undoDocument, validateSuggestions, acceptedProposal, proposalState, makeDocument, toMarkdown, validWorkspace } from '../src/lib/workspace.js';
 import { parseAnswer, runAssistant } from '../src/lib/assistant.js';
 import { aiMiddleware, validateConnection } from '../server/ai.mjs';
+import {editManuscript,fieldValue} from '../src/lib/workspace.js';
+import {conversationHistory} from '../src/lib/assistant.js';
+import {moveProjectPoint,projectPointIndices} from '../src/lib/projects.js';
+
+test('on-paper edits persist together, reordered points keep their IDs, structural suggestions survive a follow-up', () => {
+  const original=initialWorkspace().documents[0], field='member:0';
+  const session={field,id:'one-visit',initial:fieldValue(original.resume,field)};
+  let d=editManuscript(original,session,'整理需求。',[]);
+  d=editManuscript(d,session,'整理需求。跟进验收。',[]);
+  assert.equal(d.undo.length,1);
+  assert.deepEqual(undoDocument(d).resume,original.resume);
+  const raw='<changes>'+JSON.stringify([{field,after:'整理需求。\n跟进验收。'}])+'</changes>';
+  const [p]=parseAnswer(raw,d,true,{selected:field,prompt:'请分成两条'}).proposals;
+  assert(p);assert.equal(parseAnswer(raw,d,true,{selected:field,prompt:'改写措辞'}).proposals.length,0);
+  d=mutateResume(d,moveProjectPoint(d.resume,field,1),'移动');
+  assert.equal(projectPointIndices(d.resume,'member')[1],0);
+  d=acceptedProposal(d,p);
+  assert(toMarkdown(d).includes('- 整理需求。\n- 跟进验收。'));
+  d={...d,messages:[{role:'assistant',text:'调整分段',status:'done',proposals:[p],connectionId:'m'},
+    {role:'user',text:'临时详细材料',status:'done',materialOptimization:true},
+    {role:'user',text:'另一个连接',status:'done',connectionId:'another'}]};
+  const history=conversationHistory(d,'m');
+  assert.equal(history.length,1);assert(history[0].content.includes('applied'));assert(history[0].content.includes('跟进验收'));
+  const concurrent=mutateResume(original,setField(original.resume,field,'另一端的新文字'));
+  assert.equal(editManuscript(concurrent,session,'旧编辑器内容',[]),concurrent);
+});
+
+test('an expansion of unchanged wording must add a detail from the selected experience or the user', () => {
+  const original = initialWorkspace().documents[0];
+  const field = 'member:0', before = '把内容检索与协作需求整理成验收清单。';
+  const doc = mutateResume(original, setField(original.resume, field, before));
+  const detail = '整理例外流程并复核失败路径。';
+  const context = {
+    fields: [{id:field,text:before}],
+    sources: [{id:'member',facts:[detail]}, {id:'another',facts:['访谈值班人员并记录交接问题。']}],
+  };
+  const suggestions = (extra, supplied) => validateSuggestions([{field,after:before + extra}], doc, {selected:field,context,supplied});
+  assert.equal(suggestions('有效推动整体效率大幅提升。').length, 0);
+  assert.equal(suggestions('访谈值班人员并记录交接问题。').length, 0);
+  assert.equal(suggestions(detail).length, 1);
+  assert.equal(suggestions('编写首轮试用的任务说明。','编写首轮试用的任务说明。').length, 1);
+});
 
 test('independent applications preserve source facts and support undo/redo', () => {
   const workspace = initialWorkspace(), original = workspace.documents[0];

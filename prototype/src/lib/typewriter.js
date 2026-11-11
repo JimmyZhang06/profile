@@ -3,7 +3,7 @@ const defaultClock = { now: () => performance.now(), schedule: callback => setTi
 
 // One request owns one writer. Persist only text already shown, so stopping or
 // changing documents cannot later reveal a queued reply or its suggestions.
-export function createTypewriter({ onText, signal, reducedMotion = () => false, clock = defaultClock }) {
+export function createTypewriter({ onText, signal, reducedMotion = () => false, paused = () => false, clock = defaultClock }) {
   let target = [], shown = '', count = 0, timer = null, previous = 0, credit = 0, rate = 45;
   let closed = false, resolveDrain, rejectDrain;
   const abortError = () => new DOMException('已停止', 'AbortError');
@@ -19,7 +19,10 @@ export function createTypewriter({ onText, signal, reducedMotion = () => false, 
     timer = null;
     if (closed) return;
     const now = clock.now();
-    credit += Math.max(0, now - previous) * rate / 1000;
+    // A throttled background tab must not consume the entire manuscript on
+    // its first visible frame. Resume from the last visible grapheme.
+    if (paused()) { previous = now; timer = clock.schedule(tick); return; }
+    credit += Math.max(0, Math.min(64, now - previous)) * rate / 1000;
     previous = now;
     const step = Math.floor(credit);
     if (reducedMotion()) count = target.length;

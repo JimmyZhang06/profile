@@ -18,6 +18,7 @@ import {
 } from "./projects.js";
 import { getResumeDesign, templateDesign } from "./resumeDesign.js";
 import { restrictMaterialContext } from "./materialScope.js";
+import { addsSupportedDetail, experienceParagraphs, manuscriptText } from "./deliveryWording.js";
 
 export const deliveryDetailKeys = [
   "background",
@@ -286,10 +287,10 @@ export function deliverySelection(plan, prepared) {
       .filter((f) => selected.has(f.id.split(":")[0]))
       .map((f) => f.id),
   );
-  return {projectIds, workIds, researchIds, catalog, allowedFields};
+  return {projectIds, workIds, researchIds, catalog, allowedFields, records: new Map(selectedRecords.map((e) => [e.id,e]))};
 }
 
-export function validatedChange(item, {catalog, allowedFields}) {
+export function validatedChange(item, {catalog, allowedFields, records}, allowEditorialOmission = false) {
     if (!allowedFields.has(item?.field)) fail("改写包含未选择的字段");
     const evidence = citations(
       item.evidence,
@@ -298,16 +299,23 @@ export function validatedChange(item, {catalog, allowedFields}) {
     );
     const max =
       item.field === "summary" ? 360 : item.field === "skills" ? 500 : 1200;
-    const text = groundedText(item.text, evidence, max);
+    const record = records?.get(item.field.split(':')[0]);
+    if (allowEditorialOmission && !manuscriptText(groundedText(item.text,evidence,max),record)) return null;
+    const clean = (value) => {
+      const wording = manuscriptText(groundedText(value,evidence,max), record);
+      if (!wording) fail("这条正文只有审阅说明，缺少可投递的经历");
+      return record ? experienceParagraphs(wording) : wording;
+    };
+    const text = clean(item.text);
     const compact = item.compact
-      ? groundedText(item.compact, evidence, max)
+      ? (manuscriptText(groundedText(item.compact,evidence,max),record) || text)
       : text;
     // An optional fuller version uses exactly the same source excerpts. An
     // invalid optional variant cannot displace an otherwise valid paragraph.
     let expanded;
     if (typeof item.expanded === "string" && item.expanded.length > text.length) {
       try {
-        const fuller = groundedText(item.expanded, evidence, max);
+        const fuller = clean(item.expanded);
         if (fuller.length > text.length && addsSupportedDetail(text, fuller, evidence)) expanded = fuller;
       } catch { /* Keep the verified primary and compact versions. */ }
     }
@@ -320,36 +328,26 @@ export function validatedChange(item, {catalog, allowedFields}) {
     };
 }
 
-function addsSupportedDetail(text, fuller, evidence) {
-  const words = (s) => s.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase();
-  const before = words(text), after = words(fuller);
-  return evidence.some(({quote}) => {
-    const proof = words(quote);
-    for (let i = 0; i <= proof.length - 4; i++) {
-      const detail = proof.slice(i, i + 4);
-      if (after.includes(detail) && !before.includes(detail)) return true;
-    }
-    return false;
-  });
-}
-
 export function parseDelivery(raw, prepared) {
   const plan = typeof raw === "string" ? readDeliveryResult(raw, "resume") : raw;
   if (!plan || !Array.isArray(plan.changes) || plan.changes.length > 20) fail("简历结构不正确");
   const {context, seed:{resume:r}} = prepared;
   const selection = deliverySelection(plan, prepared);
   const {projectIds, workIds, researchIds, catalog} = selection;
-  const changes = plan.changes.map((item) => validatedChange(item, selection));
-  const seen = new Set(changes.map((c) => c.field));
-  if (seen.size !== changes.length) fail("改写包含未选择的字段或重复的字段");
+  const seen = new Set(plan.changes.map((c) => c?.field));
+  if (seen.size !== plan.changes.length) fail("改写包含未选择的字段或重复的字段");
+  const changes = plan.changes.map((item) => validatedChange(item, selection,
+    typeof item?.field === 'string' && projectIds.includes(item.field.split(':')[0]))).filter(Boolean);
   for (const id of projectIds) {
-    const points = changes.filter((c) => c.field.startsWith(id + ":"));
+    const original = plan.changes.filter((c) => c.field.startsWith(id + ":"));
+    const points = changes.filter((c) => c.field.startsWith(id + ":")).sort((a,b) => Number(a.field.split(':')[1])-Number(b.field.split(':')[1]));
     if (
       points.length < 1 ||
       !seen.has(id + ":0") ||
-      points.some((_, index) => !seen.has(id + ":" + index))
+      original.some((_, index) => !seen.has(id + ":" + index))
     )
       fail("项目要点不完整");
+    points.forEach((c,i) => { c.field = id + ':' + i; });
   }
   for (const id of [...workIds, ...researchIds])
     if (!fieldValue(r, id + ":description")?.trim() || !seen.has(id + ":description"))
@@ -416,14 +414,14 @@ export function localDelivery(prepared) {
         e.factual &&
         /:fact:|:details:(responsibilities|actions|results)$/.test(e.id),
     );
-    const unique = [...new Map(points.map((p) => [p.text, p])).values()]
+    const unique = [...new Map(points.map((p) => [p.text, p])).values()].filter((p) => manuscriptText(p.text))
       .sort((a, b) => rank(b.text) - rank(a.text))
       .slice(0, 3);
     unique.forEach((p, i) =>
       changes.push({
         field: id + ":" + i,
-        text: p.text,
-        compact: p.text,
+        text: manuscriptText(p.text),
+        compact: manuscriptText(p.text),
         evidence: [{ source: p.id, label: p.label, quote: p.text }],
       }),
     );
@@ -470,7 +468,13 @@ export function assembleDelivery(prepared, plan) {
     r.skills = "";
   }
   for (const change of plan.changes) r = setField(r, change.field, change.text);
+  if (plan.mode === "local") {
+    for (const entry of [...r.workEntries,...r.researchEntries]) {
+      r = setField(r,entry.id + ":description",experienceParagraphs(manuscriptText(entry.description,entry)));
+    }
+  }
   doc.resume = syncLegacyFields(r);
+  doc.messages = [];
   doc.example = !!prepared.profileExample || r.sources.some((p) => p.example);
   doc.title =
     ([doc.job.company, doc.job.title].filter(Boolean).join(" · ") || "岗位") +

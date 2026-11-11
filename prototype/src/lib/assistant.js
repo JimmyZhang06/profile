@@ -1,11 +1,11 @@
-import { assistantFieldIds, fieldValue, fieldLabel, validateSuggestions } from './workspace.js';
+import { assistantFieldIds, fieldValue, fieldLabel, proposalState, validateSuggestions } from './workspace.js';
 import { visibleRecords } from './profile.js';
 import { getProjectBullets, keywordMatches, projectDetails, projectSearchText } from './projects.js';
 import { restrictMaterialContext, validateMaterialApproval } from './materialScope.js';
 import { localDelivery, parseDelivery, readDeliveryResult } from './delivery.js';
 import { deliveryCallPlan, isDeliveryPurpose, restoreDeliveryIds, screeningBatches, shortlistedContext, validateShortlist } from './deliverySelection.js';
 import { deliveryFieldStream } from './deliveryStream.js';
-import { rewriteDirections, rewriteIssue, sameWording } from './revisionText.js';
+import { requestsParagraphs, rewriteDirections, rewriteIssue, sameWording } from './revisionText.js';
 
 export const modelName = (settings, capability = 'rewrite') => settings.bindings[capability] === 'offline' ? '本地整理' : settings.connections.find(c => c.id === settings.bindings[capability])?.name || '选择模型';
 export async function api(path, payload, signal, ownerId) {
@@ -26,7 +26,7 @@ export function buildAssistantContext(doc, selected, materialApproval = null, co
     .map(id => ({ id, label: fieldLabel(doc.resume, id), text: fieldValue(doc.resume, id) }));
   // Ordinary conversation sends existing resume content, never the newly added
   // detailed archive. Extended material needs a separate, explicit review step.
-  const sources = selectedProjects.map(p => ({ id: p.id, name: p.name, role: p.role, date: p.date, tags: p.tags, facts: getProjectBullets(doc.resume, p.id).map((_, i) => fieldValue(doc.resume, p.id + ':' + i)) }));
+  const sources = selectedProjects.map(p => ({ id:p.id, name:fieldValue(doc.resume,p.id+':name'), role:fieldValue(doc.resume,p.id+':role'), date:fieldValue(doc.resume,p.id+':date'), tags:p.tags, facts:getProjectBullets(doc.resume,p.id).map((_,i) => fieldValue(doc.resume,p.id+':'+i)) }));
   if (materialApproval) {
     validateMaterialApproval(materialApproval, connection);
     for (const source of sources) {
@@ -42,13 +42,16 @@ export function buildAssistantContext(doc, selected, materialApproval = null, co
   };
   return restrictMaterialContext({ job: doc.job, fields, selected, sources, headerPresent }, materialApproval, connection);
 }
-export function parseAnswer(raw, doc, editRequested = false) {
+export function parseAnswer(raw, doc, editRequested = false, {selected, prompt = '', context} = {}) {
   const match = raw.match(/<changes>([\s\S]*?)<\/changes>/);
   let changes = [];
   if (match) { try { changes = JSON.parse(match[1]); } catch { throw new Error('建议格式不完整，未修改简历。请重试。'); } }
   if (!Array.isArray(changes)) throw new Error('建议格式不完整，未修改简历。请重试。');
   if (raw.includes('<changes>') && !match) throw new Error('生成中断，建议未完成。请重试。');
-  const proposals = validateSuggestions(changes, doc);
+  const proposals = validateSuggestions(selected ? changes.filter((c) => c?.field === selected) : changes, doc, {
+    paragraphs:requestsParagraphs(prompt), selected, context,
+    supplied:/^(?:补充事实|实际情况|我确认)[：:]\s*(.{4,600})$/su.exec(prompt.trim())?.[1],
+  });
   let text = raw.split('<changes>')[0].trim();
   if (changes.length && !proposals.length) {
     text = changes.every((c) => typeof c?.after === 'string' && typeof c.field === 'string' && assistantFieldIds(doc.resume).includes(c.field) && sameWording(c.after,fieldValue(doc.resume,c.field)))
@@ -59,8 +62,25 @@ export function parseAnswer(raw, doc, editRequested = false) {
   }
   return { text: text || '已整理修改建议，请核对后采用。', proposals };
 }
+
+export function conversationHistory(doc, connectionId) {
+  const visible = new Set(assistantFieldIds(doc.resume));
+  return doc.messages.filter((m) => m.status === 'done' && !m.kind && !m.materialOptimization &&
+    (!m.connectionId || m.connectionId === connectionId)).slice(-10).map((m) => {
+    const alternatives = (m.proposals || []).filter((p) => visible.has(p.field) && p.jobText === doc.job.text)
+      .map((p) => ({field:p.field,wording:p.after,status:m.dismissed?.includes(p.id) ? 'dismissed' : proposalState(doc,p)}));
+    return {role:m.role,content:(m.text + (alternatives.length ? '\n上一轮建议及当前状态：'+JSON.stringify(alternatives) : '')).slice(0,8000)};
+  });
+}
 async function localResult({ prompt, doc, selected, library }) {
   const r = doc.resume;
+  if (selected && requestsParagraphs(prompt)) {
+    const before = fieldValue(r,selected);
+    const parts = before.split(/(?<=[。；;！？])\s*/u).map((s) => s.trim()).filter(Boolean);
+    const after = /合并|合成一/u.test(prompt) ? before.split('\n').filter(Boolean).join('') : parts.join('\n');
+    const proposals = validateSuggestions([{field:selected,after,reason:'按原有完整句子调整要点分段。'}],doc,{paragraphs:true});
+    return {text:proposals.length ? '已按原句调整分段，可以对照后采用。' : '当前段落没有可安全拆分的完整句子。可以点正文自行换行，也可以用已连接的模型改写。',proposals};
+  }
   if (/检查|完整|缺少|缺口/.test(prompt)) {
     const missing = [['姓名', r.name], ['联系方式', r.contact], ['个人简介', r.summary], ['实习与工作经历', Array.isArray(r.workEntries) ? visibleRecords(r, 'workEntries').map(item => item.description).join('') : r.experience], ['教育背景', Array.isArray(r.educationEntries) ? visibleRecords(r, 'educationEntries').map(item => item.organization).join('') : r.school]].filter(([, v]) => !v?.trim()).map(([label]) => label);
     const quantified = r.projectIds.some(id => getProjectBullets(r, id).some((_, i) => /\d/.test(fieldValue(r, id + ':' + i))));
@@ -84,7 +104,7 @@ export function registerAdapter(name, adapter) { adapters.set(name, adapter); }
 class ModelOutputLimit extends Error {
   constructor() { super('模型输出已达到长度上限，本轮未完成。'); }
 }
-registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, settings, materialApproval, signal, onText, purpose, prepared, paperSpace, onField, direction, condense, brief, part, characters }) => {
+registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, settings, materialApproval, signal, onText, purpose, prepared, paperSpace, onField, direction, condense, brief, part, characters, covered }) => {
   const connection = settings.connections.find(item => item.id === connectionId);
   const delivery = isDeliveryPurpose(purpose);
   const scoped = purpose === 'field-rewrite';
@@ -100,11 +120,11 @@ registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, sett
     request.deliveryFormat = 'short-ids';
     if (brief) request.brief = true;
     if (purpose === 'delivery-section') Object.assign(request,{part,characters});
+    if (part === 'supplement') request.covered = covered;
     if (purpose === 'delivery' && paperSpace) request.paperSpace = {lines:paperSpace.lines, columns:paperSpace.columns};
     if (condense) request.condense = true;
   } else if (!scoped) {
-    request.history = doc.messages.filter(m => m.status === 'done' && !m.kind && !m.materialOptimization)
-      .map(m => ({role:m.role, content:m.text}));
+    request.history = conversationHistory(doc,connectionId);
   }
   const response = await fetch(settings.cloudAccount ? '/api/cloud/chat' : '/api/chat', {
     method:'POST', signal, body:JSON.stringify(request),
@@ -140,7 +160,7 @@ registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, sett
     if (limited) throw new ModelOutputLimit();
     if (!ended || !raw.trim()) throw new Error('连接中断，回答未完成。请重试。');
     if (!delivery) {
-      const answer = parseAnswer(raw, doc, /精简|改写|帮我改|优化.{0,10}(简历|表述|措辞)/.test(prompt));
+      const answer = parseAnswer(raw, doc, requestsParagraphs(prompt) || /精简|改写|帮我改|突出|扩写|优化.{0,10}(简历|表述|措辞)/.test(prompt),{selected,prompt,context});
       if (!scoped) return answer;
       const proposal = answer.proposals.find((p) => p.field === selected);
       if (!proposal) throw new Error('模型没有给出这段正文的有效替换。请具体指出要突出或删减的内容。');
@@ -186,8 +206,7 @@ export async function runDelivery(input) {
   let calls = 0;
   const ask = async (scope, options) => {
     input.signal.throwIfAborted();
-    // Reserve the last authorized call for a measured page overflow.
-    if (calls >= strategy.maximum - 1) throw new Error('已达到本次确认的调用次数，已停止生成。');
+    if (calls >= strategy.maximum - 2) throw new Error('已达到本次确认的调用次数，已停止生成。');
     calls++;
     return adapter({...input, prepared:{...input.prepared,context:scope}, connectionId, ...options});
   };
@@ -242,6 +261,15 @@ export async function runDelivery(input) {
 
 function smallLimit(part) {
   return new Error('模型输出已达到长度上限，连最短的' + part + '也未完整返回。可提高此连接的单次输出上限，或换一个模型重试。');
+}
+
+export async function enrichDelivery(run, draft, scope, room, signal) {
+  signal.throwIfAborted();
+  const {coveredPoints,supplementPoints} = await import('./deliverySupplement.js');
+  const result = await adapters.get('compatible')({...run,signal,purpose:'delivery-section',part:'supplement',
+    prepared:{...run.prepared,context:scope},covered:coveredPoints(draft,scope),characters:Math.max(25,(room.lines - 2)*room.columns)});
+  signal.throwIfAborted();
+  return supplementPoints(result,scope,draft,run.prepared);
 }
 
 export async function refitDelivery(run, draft, paperSpace, overflowMm, signal) {

@@ -1,6 +1,8 @@
 import {deliveryDesign, nextPageAdjustment} from './delivery.js';
 import {fieldValue, setField} from './workspace.js';
 import {syncLegacyFields} from './profile.js';
+import {addSupplement} from './deliverySupplement.js';
+import {manuscriptText} from './deliveryWording.js';
 
 export function paperOutline(r) {
   return syncLegacyFields({...r, design:deliveryDesign(), font:'sans', sectionOrder:'application',
@@ -56,7 +58,7 @@ function supplementaryPoint(doc, tried) {
     const original = kind === 'fact' ? project.facts[Number(key)]
       : kind === 'details' && ['actions','results','responsibilities','collaboration'].includes(key) ? project.details?.[key] : '';
     const text = proof.quote.trim();
-    if (original?.trim() !== text || text.length < 18 || text.length > 140 || text.includes('\n')) continue;
+    if (original?.trim() !== text || text.length < 18 || text.length > 140 || text.includes('\n') || manuscriptText(text) !== text) continue;
     if (plan.changes.some((c) => c.evidence.some((e) => overlaps(e,proof)) || c.text.includes(text) || text.includes(c.text))) continue;
     return {id, proof, text, field:id+':'+r.projectBullets[id].length};
   }
@@ -103,7 +105,7 @@ export function composePage(doc, measurement, pass) {
     }
     if (adjustment) return {doc:{...doc,resume:adjustment.resume,delivery:{...delivery,layoutSteps:[...delivery.layoutSteps,adjustment.step]}},pass:{...pass,shortened:true}};
   }
-  if (!measurement.horizontal && !pass.shortened && measurement.heightMm < 266) {
+  if (!measurement.horizontal && !pass.shortened && measurement.heightMm < 278) {
     const richer = delivery.changes.filter((c) => c.expanded && c.text === fieldValue(resume,c.field) && !pass.tried.includes(c.field));
     // Give space to what the applicant actually did before extending an intro.
     richer.sort((a,b) => Number(b.field.includes(':')) - Number(a.field.includes(':')));
@@ -119,9 +121,11 @@ export function composePage(doc, measurement, pass) {
       return {doc:{...doc,resume:{...resume,projectBullets},delivery:{...delivery,changes:[...delivery.changes,change]}},
         pass:{...pass,tried:[...pass.tried,proof.source],beforeExpansion:doc}};
     }
-    if (measurement.heightMm < 224 && !pass.tried.includes('open-spacing')) {
-      const design = {...resume.design,lineHeight:1.6,sectionGap:20,paragraphGap:5};
-      return attempt({...resume,design},{tried:[...pass.tried,'open-spacing'],beforeExpansion:doc});
+    for (const [i, addition] of (pass.additions || []).entries()) {
+      const key = 'supplement:' + i;
+      if (pass.tried.includes(key)) continue;
+      const next = addSupplement(doc,addition);
+      if (next) return {doc:next,pass:{...pass,tried:[...pass.tried,key],beforeExpansion:doc}};
     }
   }
   return null;

@@ -343,6 +343,39 @@
   background: white;
   padding: 2px 8px;
 }
+.resume-point-lines .resume-text-line {
+  position: relative;
+  padding-inline-start: 1.25em;
+}
+.resume-point-lines .resume-text-line::before,
+.resume-project li .resume-text-line + .resume-text-line::before {
+  content: "•";
+  position: absolute;
+  inset-inline-start: .15em;
+  color: #666;
+}
+.resume-project li .resume-text-line + .resume-text-line { position: relative; }
+.resume-project li .resume-text-line + .resume-text-line::before { inset-inline-start: -1.22em; }
+@media screen {
+  .canvas-panel .editor-paper.resume-page.resume-document { min-height: 297mm; transform-origin: top left; }
+  .paper-editor-host, .paper-editor-content { display:block; min-width:0; }
+  .paper-editor-content .richtext-input {
+    display:block; max-height:none; min-height:1em; overflow:visible; padding:0; border:0;
+    background:transparent; color:inherit; font:inherit; letter-spacing:inherit; text-align:inherit;
+    border-radius:2px; outline:1px solid var(--border-strong); outline-offset:3px;
+  }
+  .paper-editor-content .richtext-input p + p { margin-top: var(--resume-paragraph-gap); }
+  .canvas-panel .paper-edit-tools.richtext-editor { display:flex; flex-flow:row wrap; align-items:center; justify-content:space-between; gap:4px; padding:5px 12px; }
+  .paper-edit-tools .richtext-toolbar { padding:0; border:0; background:none; }
+  .canvas-panel .paper-edit-tools .inline-editor-actions { margin:0; }
+  .editor-fit { color:var(--text-secondary); font-size:12px; white-space:nowrap; padding:4px 6px; border-radius:5px; }
+  .editor-fit:hover { background:var(--surface-hover); }
+  .chat-draft-notes { margin:12px 0; text-align:start; font-size:14px; }
+  .chat-draft-notes summary { cursor:pointer; color:var(--text-secondary); }
+  .chat-draft-notes ul { padding-inline-start:1.4em; line-height:1.6; }
+  .reading-mode .resume-editable [role="button"] { cursor:text; }
+  .resume-editable [role="button"]:is(:hover,:focus-visible) { outline:1px solid var(--border); outline-offset:2px; border-radius:2px; }
+}
 .delivery-measure {
   position: fixed;
   left: -20000px;
@@ -425,6 +458,7 @@
   }
 }
 @media print {
+  .delivery-measure, .paper-edit-tools { display:none !important; }
   body:has(.delivery-print-host) > #root {
     display: none !important;
   }

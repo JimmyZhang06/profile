@@ -41,14 +41,15 @@ export function Chat({ doc, settings, selected, busy, focusKey, onSend, onStop, 
   return <section id="resume-conversation" className="chat-panel" aria-label="简历对话">
     <div className="chat-scroll" ref={viewportRef} role="region" aria-label="对话记录" tabIndex={0} onScroll={onScroll}>
       <div className="conversation-content" ref={contentRef}>
-        {doc.example ? <div className="conversation-date">示例对话 <span>·</span> 内容均为虚构</div> : null}
+        {doc.example ? <div className="conversation-date">{doc.delivery ? '示例资料' : '示例对话'} <span>·</span> 内容均为虚构</div> : null}
         {!doc.messages.length ? <div className="chat-welcome">
           <span className="welcome-symbol"><BrandLogo /></span>
-          <h1>一起打磨这份简历</h1>
-          <p>说说你想突出什么。我们可以从挑选经历，或修改一段表达开始。</p>
+          <h1>{doc.delivery ? '继续打磨这份投递稿' : '一起打磨这份简历'}</h1>
+          <p>{doc.delivery ? [doc.job.company,doc.job.title].filter(Boolean).join(' · ') : '说说你想突出什么。我们可以从挑选经历，或修改一段表达开始。'}</p>
+          {doc.delivery?.gaps?.length > 0 && <details className="chat-draft-notes"><summary>可补充的资料 · {doc.delivery.gaps.length}</summary><ul>{doc.delivery.gaps.map((gap,i) => <li key={i}>{gap}</li>)}</ul></details>}
           <div>
-            <button disabled={!enabled || busy} onClick={() => send('检查这份简历的完整度')}><IconFileText size={18} /><span>看看还可以补充什么</span><IconArrowUpRight size={16} /></button>
-            <button disabled={busy} onClick={() => onOpen('tailor')}><IconBooks size={18} /><span>从资料库按 JD 生成简历</span><IconArrowUpRight size={16} /></button>
+            <button disabled={!enabled || busy} onClick={() => send(doc.delivery ? '结合当前 JD 优化这份简历，把最能体现个人贡献的一段改成具体行动与交付，给我可直接采用的改写。' : '检查这份简历的完整度')}><IconPencil size={18} /><span>{doc.delivery ? '突出最相关的一段经历' : '看看还可以补充什么'}</span><IconArrowUpRight size={16} /></button>
+            <button disabled={busy} onClick={() => doc.delivery ? onOpen('export') : onOpen('tailor')}><IconFileText size={18} /><span>{doc.delivery ? '核对一页排版与投递信息' : '从资料库按 JD 生成简历'}</span><IconArrowUpRight size={16} /></button>
           </div>
         </div> : null}
         {doc.messages.map(message => <Message key={message.id} message={message} doc={doc}

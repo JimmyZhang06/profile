@@ -57,6 +57,14 @@ test('instant local replies reveal progressively and complete before suggestions
   h.writer.dispose();
 });
 
+test('a paused manuscript must visibly reveal a proper prefix after returning to the tab', async () => {
+  let hidden=true;
+  const h=harness({paused:() => hidden}), text='正文使用已经完成核对的经历。'.repeat(12);
+  const finished=h.writer.finish(text); h.advance(6000); assert.equal(h.values.length,0);
+  hidden=false; h.advance(48); assert(h.values.at(-1).length>0 && h.values.at(-1).length<text.length);
+  h.advance(5000);await finished;assert.equal(h.values.at(-1),text);
+});
+
 test('bursty model chunks remain ordered and never split complete emoji or combining graphemes', async () => {
   const h = harness(), segments = ['你', '好', '👩🏽‍💻', 'é', '🇨🇳', '，', '请', '核', '对', '。'];
   h.writer.push(segments.slice(0, 3).join('')); h.advance(24);

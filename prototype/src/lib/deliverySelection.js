@@ -5,7 +5,13 @@ export function jobFromListing(text, current = { company: '', title: '', text: '
     .replace(/^(?:岗位名称|职位名称|招聘岗位)[：:]\s*/, '').replace(/\s*(?:急招|招聘中)[！!]?$/, '').trim();
   const heading = text.includes('\n') && firstLine.length <= 50 && /实习生|工程师|产品经理|产品策划|运营|设计师|分析师/.test(firstLine) &&
     !/[。；：:？?]/.test(firstLine) ? firstLine : '';
-  return {...current, title: current.title || heading, text};
+  const labeledCompany = /^(?:目标公司|招聘公司|公司名称|公司)[：:][ \t]*([^\n\r]{1,60})$/mu.exec(text)?.[1]?.trim();
+  const labeledTitle = /^(?:岗位名称|职位名称|招聘岗位)[：:][ \t]*([^\n\r]{1,60})$/mu.exec(text)?.[1]?.trim();
+  const pair = /^([\p{L}\d]{2,20})\s*(?:[|｜·]\s*|\s+)(.+)$/u.exec(heading);
+  const body = text.slice(text.indexOf('\n')+1);
+  const employer = pair && (pair[1] === labeledCompany || /公司|集团|科技|银行|大学|研究院/u.test(pair[1]) ||
+    /[|｜·]/u.test(heading) || new RegExp('(?:参与|加入|来自|关于|就职于)'+pair[1],'u').test(body)) ? pair[1] : '';
+  return {...current, title:current.title || labeledTitle || (employer ? pair[2] : heading), company:current.company || labeledCompany || employer, text};
 }
 
 export function chatDeliveryJob(text, job) {
@@ -103,7 +109,7 @@ export function screeningBatches(context) {
 export const isDeliveryPurpose = (purpose) => ['delivery', 'delivery-selection', 'delivery-section'].includes(purpose);
 
 // Two short retries are shared by the entire run: one ballot and one section.
-// Page fitting may make one final call after the complete draft is measured.
+// Reserve one call each for unused evidence and exceptional shortening.
 export function deliveryCallPlan(context, maxOutputTokens, batches = screeningBatches(context).length) {
   const experiences = Math.min(2, context.sources.length)
     + Math.min(2, context.fields.filter((f) => f.kind === 'workEntries').length)
@@ -111,7 +117,7 @@ export function deliveryCallPlan(context, maxOutputTokens, batches = screeningBa
   const bySection = maxOutputTokens > 0 && maxOutputTokens < 8192;
   const sectionCalls = Math.max(1, batches) + Number(batches > 1) + experiences + 1;
   return {bySection, usual: bySection ? sectionCalls : batches + 1,
-    maximum: sectionCalls + Number(!bySection) + 2 + 1};
+    maximum: sectionCalls + Number(!bySection) + 2 + 2};
 }
 
 export function validateShortlist(result, context) {

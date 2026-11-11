@@ -7,7 +7,9 @@ import {DeliveryPreview} from './DeliveryPreview.jsx';
 import {DeliveryProofread} from './DeliveryProofread.jsx';
 import {assembleDelivery, finalizeDelivery} from '../lib/delivery.js';
 import {composePage, paperOutline, paperWording, writingPaper} from '../lib/deliveryComposition.js';
-import {refitDelivery, runDelivery} from '../lib/assistant.js';
+import {enrichDelivery, refitDelivery, runDelivery} from '../lib/assistant.js';
+import {supplementContext} from '../lib/deliverySupplement.js';
+import {fieldValue, setField as setPaperField} from '../lib/workspace.js';
 import {createTypewriter} from '../lib/typewriter.js';
 import {useMediaQuery} from '../hooks/useMediaQuery.js';
 
@@ -23,12 +25,11 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
   const [space,setSpace] = useState(null), [phase,setPhase] = useState(0);
   const [status,setStatus] = useState('正在测量页首与教育背景。');
   const [live,setLive] = useState(null), [candidate,setCandidate] = useState(null);
-  const [skipped,setSkipped] = useState(false), skip = useRef(false);
   const manuscript = useRef(null), follow = useRef(true), lastFollow = useRef(0);
   const [repair,setRepair] = useState(false), [room,setRoom] = useState(null);
   const [field,setField] = useState('summary'), [jump,setJump] = useState(null);
   const task = useRef(null), current = useRef(null), pass = useRef({tried:[]}), done = useRef(false);
-  const refit = useRef(null);
+  const refit = useRef(null), supplement = useRef('idle'), firstPaper = useRef(null);
   const callbacks = useRef({});
   callbacks.current = {onError,onReady};
   useEffect(() => {
@@ -42,7 +43,7 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
     return () => {scroller.removeEventListener('wheel',takeControl);scroller.removeEventListener('touchmove',takeControl);scroller.removeEventListener('keydown',key);};
   }, []);
   useEffect(() => {
-    if (phase !== 2 || skipped || !follow.current || !live || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (phase !== 2 || !follow.current || !live || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const now = performance.now();
     if (now - lastFollow.current < 220) return;
     lastFollow.current = now;
@@ -52,7 +53,7 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
       const distance = caret.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom + 24;
       if (distance > 0) scroller.scrollTop += distance;
     }
-  }, [live,phase,skipped]);
+  }, [live,phase]);
 
   useEffect(() => {
     if (!space) return;
@@ -61,7 +62,7 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
     const items = [], seen = new Set();
     let text = '';
     const writer = createTypewriter({signal:abort.signal,
-      reducedMotion:() => skip.current || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches,
+      paused:() => document.hidden,
       onText:(shown) => {
         if (abort.signal.aborted) return;
         const currentItem = items.find((item) => item.end >= shown.length);
@@ -88,9 +89,13 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
       abort.signal.throwIfAborted();
       if (!plan.projectIds.length && !plan.workIds.length && !plan.researchIds.length) throw new Error('当前素材没有可写入的具体经历。请先补充自己的行动或交付成果。');
       const draft = assembleDelivery(prepared,plan);
+      if (items.some((item) => fieldValue(draft.resume,item.field) !== item.text)) {
+        items.length = 0; seen.clear(); text = ''; writer.push('',true);
+      }
       for (const item of paperWording(draft)) append(item);
       await writer.finish(text);
       abort.signal.throwIfAborted();
+      firstPaper.current = draft.resume;
       current.current = draft;
       setCandidate(draft);
       setPhase(3);
@@ -100,9 +105,36 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
     return () => { abort.abort(); writer.dispose(); };
   }, [space,run,source,outline,local,prepared]);
 
-  function finish(draft) {
+  async function finish(draft) {
     if (done.current || task.current?.signal.aborted) return;
     done.current = true;
+    const signal = task.current.signal;
+    // Fitting may add a new bullet or a fuller version after the initial
+    // manuscript was typed. Reveal that new writing before handing it off.
+    const changed = repair ? [] : paperWording(draft).flatMap(({field,text}) => {
+      const old = fieldValue(firstPaper.current,field);
+      if (old === text || text.length <= old.length) return [];
+      const prefix = text.startsWith(old) ? old : '';
+      return [{field,prefix,tail:text.slice(prefix.length)}];
+    });
+    if (changed.length) {
+      const reveal = (shown) => {
+        let count = shown.length, resume = draft.resume, field;
+        for (const part of changed) {
+          const n = Math.min(count,part.tail.length);
+          resume = setPaperField(resume,part.field,part.prefix + part.tail.slice(0,n));
+          if (n || !field) field = part.field;
+          count -= n;
+        }
+        setLive({resume,field});
+      };
+      setPhase(2); setStatus('正在写入适合剩余版面的经历细节。'); reveal(''); setCandidate(null);
+      const writer = createTypewriter({onText:reveal,signal,paused:() => document.hidden});
+      try { await writer.finish(changed.map((p) => p.tail).join('')); }
+      catch (error) { if (!signal.aborted) callbacks.current.onError(error.message); return; }
+      finally { writer.dispose(); }
+    }
+    if (signal.aborted) return;
     callbacks.current.onReady(finalizeDelivery(draft));
   }
   function needRepair(draft, result, notice) {
@@ -129,8 +161,8 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
       setSpace((s) => s || {lines:result.lines,columns:result.columns});
       return;
     }
-    const draft = current.current;
-    if (!draft || result.resume !== draft.resume || task.current?.signal.aborted || refit.current?.pending) return;
+    let draft = current.current;
+    if (!draft || result.resume !== draft.resume || task.current?.signal.aborted || refit.current?.pending || supplement.current === 'pending') return;
     if (repair) { setRoom(result); return; }
     const next = composePage(draft,result,pass.current);
     if (next) {
@@ -144,7 +176,25 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
       const keepFirst = first && !first.result.horizontal && (result.horizontal || first.result.heightMm < result.heightMm);
       needRepair(keepFirst ? first.draft : draft, keepFirst ? first.result : result,
         '当前内容仍需取舍。可以直接精简正文或收起一段经历，改好后继续。');
-    } else finish(draft);
+    } else if (!local && !pass.current.shortened && result.heightMm < 273 && supplement.current === 'idle') {
+      const scope = supplementContext(draft,prepared.context);
+      if (!scope) { supplement.current = 'done'; measure(result); return; }
+      supplement.current = 'pending';
+      setStatus('版面还有余量，正在从已选经历中补写尚未呈现的行动与成果。');
+      const signal = task.current.signal;
+      enrichDelivery(run,draft,scope,result,signal).then((additions) => { pass.current = {...pass.current,additions}; })
+        .catch(() => { if (!signal.aborted) supplement.current = 'failed'; })
+        .finally(() => { if (supplement.current === 'pending') supplement.current = 'done'; if (!signal.aborted) measure(result); });
+    } else {
+      if (supplement.current === 'failed') draft = {...draft,delivery:{...draft.delivery,gaps:[...draft.delivery.gaps.slice(0,7),
+        '本次补写未完成，已保留通过排版检查的初稿。需要更多细节时可以选中经历继续打磨。']}};
+      else if (result.heightMm < 258 && draft.delivery.gaps.length < 8) {
+        const lead = draft.resume.workEntries[0]?.organization || draft.resume.sources[0]?.name || draft.resume.researchEntries[0]?.organization;
+        if (lead) draft = {...draft,delivery:{...draft.delivery,gaps:[...draft.delivery.gaps,
+          '在「'+lead+'」，你交付了什么，谁用什么方法验收？如有记录，可以在对话中补充。']}};
+      }
+      void finish(draft);
+    }
   }
   function editRepair(resume) {
     const next = {...current.current,resume};
@@ -154,13 +204,12 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
   }
   const fits = room?.resume === candidate?.resume && room && !room.overflow && !room.horizontal;
   const paper = candidate?.resume || live?.resume || outline;
-  const paperProps = {resume:paper, writingField:phase === 2 && !skipped ? live?.field : undefined,
+  const paperProps = {resume:paper, writingField:phase === 2 ? live?.field : undefined,
     onPick: repair ? (key) => {setField(key);setJump({area:'field'});} : undefined};
   return <Page className="page-wide generation-page" title={repair ? '调整到一页' : '正在生成简历'}
     description={[prepared.seed.job.company, prepared.seed.job.title].filter(Boolean).join(' · ')}
     onBack={onCancel} backLabel="返回岗位与选材" dirty
     footer={<><span className="footer-note">A4 · 单栏投递版</span><div className="page-action-group">
-      {!repair && phase < 3 && !skipped && <Button variant="ghost" onClick={() => {skip.current = true; setSkipped(true);}}>跳过打字动效</Button>}
       <Button variant="secondary" onClick={onCancel}>{repair ? '返回选材' : '停止生成'}</Button>
       {repair && <Button disabled={!fits} onClick={() => finish(current.current)}>完成一页校稿<IconArrowRight size={16} /></Button>}
     </div></>}>

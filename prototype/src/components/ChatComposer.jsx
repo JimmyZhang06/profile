@@ -67,7 +67,7 @@ export function ChatComposer({ doc, settings, selected, busy, focusKey, active, 
         } />
         <Menu label="选择对话模型" className="model-menu opens-up" value={<span>{enabled ? modelName(settings) : '手工模式'}</span>} items={[
           { label: '本地整理', description: '精简、选材与完整度检查', selected: settings.bindings.rewrite === 'offline', onClick: () => onModel('offline') },
-          ...settings.connections.map(connection => ({ label: connection.name, description: connection.model, selected: settings.bindings.rewrite === connection.id, onClick: () => onModel(connection.id) })),
+          ...settings.connections.filter((c) => c.enabled !== false).map(connection => ({ label: connection.name, description: connection.model, selected: settings.bindings.rewrite === connection.id, onClick: () => onModel(connection.id) })),
           { separator: true },
           { label: '管理模型连接', icon: <IconPlug size={16} />, onClick: () => onOpen('settings') },
         ]} />

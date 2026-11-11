@@ -33,12 +33,68 @@ import { parseAnswer, runDelivery, runAssistant, rewriteField, refitDelivery } f
 import { deliveryFieldStream } from "../src/lib/deliveryStream.js";
 import { composePage, paperOutline, writingPaper } from "../src/lib/deliveryComposition.js";
 import { pageWritingBudget } from "../src/lib/deliverySpace.js";
+import {addSupplement,supplementContext,supplementPoints} from '../src/lib/deliverySupplement.js';
+import {manuscriptText} from '../src/lib/deliveryWording.js';
+import {sectionEvidence} from '../src/lib/deliverySections.js';
 import { deliveryMessages } from "../server/delivery-prompt.mjs";
 import { changedSpan, rewriteIssue } from "../src/lib/revisionText.js";
 import { chatDeliveryJob, jobFromListing, jobFromFragment, screeningBatches, restoreDeliveryIds, deliveryCallPlan, deliveryModelContext, shortlistedContext } from "../src/lib/deliverySelection.js";
 
 const prepare = (approval) =>
   prepareDelivery({ job, profile, projects, approval, connection });
+
+test('spare paper accepts a distinct point only from the approved experience and retains the measured fallback', () => {
+  const prepared = prepare(), sample = structuredClone(plan);
+  sample.changes = sample.changes.filter((c) => c.field !== 'atlas:1');
+  const doc = assembleDelivery(prepared,parseDelivery(sample,prepared));
+  const scope = supplementContext(doc,prepared.context), table = sectionEvidence(scope);
+  assert(!JSON.stringify(scope).includes('PRIVATE-RAW'));
+  assert(!table.some((e) => e.quote === projects[0].facts[0]));
+  const ref = table.findIndex((e) => e.quote === projects[0].facts[1])+1;
+  const extra = supplementPoints({rows:[{text:projects[0].facts[1],refs:[ref]},
+    {text:'获得 88% 的转化提升。',refs:[ref]}]},scope,doc,prepared);
+  assert.equal(extra.length,1);
+  const probe = composePage(doc,{heightMm:245},{tried:[],additions:extra});
+  assert.equal(fieldValue(probe.doc.resume,'atlas:1'),projects[0].facts[1]);
+  assert.equal(addSupplement(probe.doc,extra[0]),null);
+  assert.equal(composePage(probe.doc,{heightMm:298,overflow:true},probe.pass).doc,doc);
+  assert.deepEqual(prepared.seed.resume.sources,projects);
+});
+
+test('editorial notes stay off the manuscript and operational negatives stay with the action', () => {
+  const body='对照需求清单完成测试，未通过校验的任务退回修改。';
+  assert.equal(manuscriptText('云山科技｜产品实习生：'+body+'未记录客户使用、团队规模与投入占比，不声称自动审批。',
+    {organization:'云山科技有限公司',title:'产品实习生'}),body);
+});
+
+test('a short point can be expanded in place and a distinct approved skill can use spare lines without another project', () => {
+  const extra='把验证反馈整理为回归用例，并在复测时逐项核对筛选条件和结果。';
+  const skill='使用 Python 清洗访谈编码表，将重复样本与缺失值分别标注后再汇总。';
+  const sources=structuredClone(projects);sources[0].facts.push(extra);
+  const prepared=prepareDelivery({job,profile:{...profile,skills:skill},projects:sources,connection});
+  const sample=structuredClone(plan);sample.changes=sample.changes.filter((c)=>c.field!=='skills');
+  const doc=assembleDelivery(prepared,parseDelivery(sample,prepared));
+  const scope=supplementContext(doc,prepared.context), refs=sectionEvidence(scope);
+  const number=t=>refs.findIndex((e)=>e.quote===t)+1;
+  const additions=supplementPoints({rows:[{text:extra,refs:[number(extra)],extend:2},{text:skill,refs:[number(skill)]}]},scope,doc,prepared);
+  assert.equal(additions.length,2);
+  const next=addSupplement(addSupplement(doc,additions[0]),additions[1]);
+  assert.equal(fieldValue(next.resume,'atlas:1'),projects[0].facts[1]+extra);
+  assert.equal(next.resume.skills,skill);
+  assert.equal(next.resume.projectBullets.atlas.length,2);
+  assert.equal(next.delivery.changes.find((c)=>c.field==='atlas:1').evidence.length,2);
+});
+
+test('a standalone editorial bullet is omitted without losing the remaining verified points', () => {
+  const prepared=prepare(), sample=structuredClone(plan);
+  const first=sample.changes.find((c) => c.field === 'atlas:0');
+  first.text='不声称自动审批或提高生产率。';
+  const clean=parseDelivery(sample,prepared);
+  assert.equal(clean.changes.find((c) => c.field==='atlas:0').text,projects[0].facts[1]);
+  assert.equal(clean.changes.some((c) => c.field==='atlas:1'),false);
+  assert.deepEqual(jobFromListing('腾讯 机器学习产品策划实习生急招\n你将参与腾讯机器学习平台的产品策划。'),
+    {company:'腾讯',title:'机器学习产品策划实习生',text:'腾讯 机器学习产品策划实习生急招\n你将参与腾讯机器学习平台的产品策划。'});
+});
 
 function completion(content, finish_reason = 'stop') {
   return new Response('data: ' + JSON.stringify({choices:[{delta:{content},finish_reason}]}) + '\n\ndata: [DONE]\n\n',
