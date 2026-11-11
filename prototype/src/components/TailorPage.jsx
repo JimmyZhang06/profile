@@ -29,6 +29,8 @@ export function TailorPage({
   onConfigure,
   onLibrary,
   onManual,
+  onImport,
+  fromFile = false,
 }) {
   const [job, setJob] = useState(
     initialJob || { company: "", title: "", text: "" },
@@ -130,7 +132,7 @@ export function TailorPage({
       description="粘贴 JD，选择参与写作的资料。简历会按一页 A4 的空间逐段生成。"
       onBack={onBack}
       className="page-wide tailor-page"
-      actions={onManual && <Button variant="ghost" disabled={busy} onClick={() => onManual(job, options)}>手动创建简历</Button>}
+      actions={<div className="page-action-group">{onImport && <Button variant="secondary" onClick={() => onImport(job,options)}>导入已有简历</Button>}{onManual && <Button variant="ghost" disabled={busy} onClick={() => onManual(job, options)}>手动创建简历</Button>}</div>}
       navigation={<DeliverySteps current={1} />}
       dirty={
         busy ||
@@ -198,7 +200,7 @@ export function TailorPage({
               <h2>本次候选经历</h2>
               <p>
                 {chosen.length} 个候选项目 · {records} 段实习 / 研究 ·
-                教育与联系方式沿用资料库
+                {fromFile ? '教育与联系方式沿用导入的简历' : '教育与联系方式沿用资料库'}
               </p>
             </div>
             <Button variant="ghost" onClick={() => onLibrary(job, options)}>

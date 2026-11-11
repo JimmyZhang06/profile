@@ -182,8 +182,7 @@ export async function importWorkspace(db, owner, input) {
   );
   const candidate = { ...emptyCloudWorkspace(), ...input.state };
   if (!candidate.documents.length) {
-    candidate.documents = emptyCloudWorkspace().documents;
-    candidate.activeId = candidate.documents[0].id;
+    candidate.activeId = null;
   }
   validate(candidate);
   const fingerprint = createHash("sha256")

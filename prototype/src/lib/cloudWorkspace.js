@@ -116,7 +116,7 @@ export function mergeImportedWorkspace(
     profile: mergeProfiles(current.profile, imported.profile, makeId),
     library: [...current.library, ...imported.library],
     documents,
-    activeId: imported.documents.find(doc => !doc.archived)?.id || documents.find(doc => doc.id === current.activeId && !doc.archived)?.id || documents.find(doc => !doc.archived)?.id || documents[0].id,
+    activeId: imported.documents.find(doc => !doc.archived)?.id || documents.find(doc => doc.id === current.activeId && !doc.archived)?.id || documents.find(doc => !doc.archived)?.id || documents[0]?.id || null,
   };
 }
 export const cloudCacheKey = (ownerId) => "luli:cloud:" + ownerId;

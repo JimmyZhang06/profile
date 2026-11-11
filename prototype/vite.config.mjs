@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { aiPlugin } from "./server/ai.mjs";
+import { resumeReaderAssets } from "./scripts/resume-reader-assets.mjs";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -43,6 +44,6 @@ export default defineConfig(({ mode }) => {
         clientFiles: ["./src/main.jsx"],
       },
     },
-    plugins: [react(), aiPlugin()],
+    plugins: [react(), aiPlugin(), resumeReaderAssets()],
   };
 });

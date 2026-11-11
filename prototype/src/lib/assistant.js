@@ -23,6 +23,7 @@ export function matchProjects(library, job) {
 export function buildAssistantContext(doc, selected, materialApproval = null, connection = null) {
   const selectedProjects = doc.resume.sources.filter(p => doc.resume.projectIds.includes(p.id));
   const fields = assistantFieldIds(doc.resume)
+    .filter(id => id !== 'additional' || selected === id)
     .map(id => ({ id, label: fieldLabel(doc.resume, id), text: fieldValue(doc.resume, id) }));
   // Ordinary conversation sends existing resume content, never the newly added
   // detailed archive. Extended material needs a separate, explicit review step.

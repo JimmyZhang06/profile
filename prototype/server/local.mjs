@@ -23,6 +23,7 @@ export async function createLocalApp(config) {
     ".ico": "image/x-icon",
     ".webmanifest": "application/manifest+json; charset=utf-8",
     ".woff2": "font/woff2",
+    ".wasm": "application/wasm",
   };
   const server = createServer(async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");

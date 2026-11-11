@@ -836,6 +836,18 @@ test("account, workspace and administration enforce real session and ownership b
       );
     },
   );
+  await t.test("clearing the final trashed resumes persists an empty cloud workspace and removes its document children", async () => {
+    const before = (await bob.request("cloud/workspace")).data;
+    const cleared = {...before.state, documents: [], activeId: null};
+    const response = await bob.request("cloud/workspace","PUT",{state:cleared,revision:before.revision,mutationId:"clear-reviewed-trash"});
+    assert.equal(response.status,200);
+    const after = (await bob.request("cloud/workspace")).data;
+    assert.equal(after.state.activeId,null); assert.deepEqual(after.state.documents,[]);
+    assert.deepEqual(after.state.library,before.state.library);
+    for (const table of ["resumes","resume_versions","conversations"]) {
+      assert.equal((await one(app.db,"SELECT COUNT(*)::int AS count FROM "+table+" WHERE owner_id=$1",[bobUser.id])).count,0);
+    }
+  });
   await t.test(
     "account deletion requires a separate email code and erases private rows and sessions",
     async () => {

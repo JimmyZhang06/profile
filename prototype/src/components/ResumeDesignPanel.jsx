@@ -4,7 +4,7 @@ import { IconButton } from './ui/index.jsx';
 import { SelectField } from './ui/SelectField.jsx';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { ResumeDocument } from './ResumeDocument.jsx';
-import { designLimits, fontOptions, getResumeDesign, resumeTemplates, templateDesign, releaseDesign, resetResumeDesign } from '../lib/resumeDesign.js';
+import { designLimits, featuredLayouts, fontOptions, getResumeDesign, resumeTemplates, templateDesign, releaseDesign, resetResumeDesign } from '../lib/resumeDesign.js';
 
 function NumberSetting({ name, label, value, unit, step = 1, onChange }) {
   const id = useId(), [min, max] = designLimits[name];
@@ -36,7 +36,10 @@ function TemplateThumbnail({ resume, template }) {
 export function ResumeDesignPanel({ resume, disabled, onChange, onClose, catalog }) {
   const isMobile = useMediaQuery('(max-width: 760px)');
   const [tab, setTab] = useState('type'), design = getResumeDesign(resume);
-  const templates = catalog || resumeTemplates;
+  const rank = t => { const index = featuredLayouts.indexOf(t.id.replace(/^builtin-/,'')); return index < 0 ? featuredLayouts.length : index; };
+  const templates = [...(catalog || resumeTemplates)].sort((a,b) => rank(a)-rank(b));
+  const selectedTemplate = t => design.catalogId ? t.id === design.catalogId && t.version === design.catalogVersion
+    : (t.id === design.template || (t.id === 'builtin-' + design.template && t.version === 1));
   const current = design.catalogId ? { name: design.catalogName + ' · v' + design.catalogVersion } : resumeTemplates.find(template => template.id === design.template);
   const update = catalog?.find(template => template.id === design.catalogId && template.version !== design.catalogVersion);
   function change(patch) { if (!disabled) onChange({ ...design, ...patch }); }
@@ -68,9 +71,9 @@ export function ResumeDesignPanel({ resume, disabled, onChange, onClose, catalog
         <p className="design-note design-edit-hint">{tab === 'type' ? '双击简历段落，可选中文字加粗。' : '调整后，直接在简历中查看变化。'}</p>
       </fieldset> : <div className="template-gallery">
         <p className="design-note">{templates.length} 款模板，点选后查看完整效果。</p>
-        <div className="template-grid">{templates.map(template => <button type="button" key={template.id} className="template-card" disabled={disabled} aria-label={'使用' + template.name + '模板'} aria-pressed={(template.version ? design.catalogId === template.id && design.catalogVersion === template.version : design.template === template.id)} onClick={() => onChange(template.version ? releaseDesign(template) : templateDesign(template.id))}>
+        <div className="template-grid">{templates.map(template => <button type="button" key={template.id} className="template-card" disabled={disabled} aria-label={'使用' + template.name + '模板'} aria-pressed={selectedTemplate(template)} onClick={() => onChange(template.version ? releaseDesign(template) : templateDesign(template.id))}>
           <TemplateThumbnail resume={resume} template={template} />
-          <span className="template-card-copy"><span className="template-card-title">{template.name}{(template.version ? design.catalogId === template.id && design.catalogVersion === template.version : design.template === template.id) ? <IconCheck size={16} /> : null}</span>
+          <span className="template-card-copy"><span className="template-card-title">{template.name}{selectedTemplate(template) ? <IconCheck size={16} /> : null}</span>
           <span className="template-description">{template.description}</span></span>
         </button>)}</div>
       </div>}

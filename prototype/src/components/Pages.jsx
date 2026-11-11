@@ -38,7 +38,7 @@ export function SourcePage({ doc, selected, onBack }) {
   const field = selected || 'summary';
   const [projectId, point] = field.split(':');
   const project = field.includes(':') ? doc.resume.sources.find(item => item.id === projectId) : null;
-  const source = project ? getProjectBullets(doc.resume, projectId)[Number(point)] : fieldValue(doc.resume.profileSource || doc.versions[0]?.resume || doc.resume, field);
+  const source = project ? getProjectBullets(doc.resume, projectId)[Number(point)] : fieldValue(field === 'additional' ? doc.versions[0]?.resume || doc.resume : doc.resume.profileSource || doc.versions[0]?.resume || doc.resume, field);
   return <Page title="原始依据" description={fieldLabel(doc.resume, field)} onBack={onBack}>
     <div className="source-section"><span>写入简历时的原始要点</span><blockquote>{source || '该条目尚未填写，可根据下方项目记录补充。'}</blockquote></div>
     <div className="source-section"><span>当前简历中的表达</span><p>{fieldValue(doc.resume, field) || '尚未填写'}</p></div>

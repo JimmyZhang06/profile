@@ -6,12 +6,24 @@ export const fontOptions = [
   { value: 'serif', label: '经典宋体' }, { value: 'sans', label: '现代黑体' }, { value: 'humanist', label: '人文楷体' },
 ];
 const classic = { font: 'serif', fontSize: 10.5, headingSize: 13, nameSize: 22, lineHeight: 1.8, paragraphGap: 6, sectionGap: 24, margin: 16 };
+const application = { font:'sans', fontSize:11, headingSize:12.5, nameSize:22, lineHeight:1.52, paragraphGap:4, sectionGap:17, margin:15 };
+export const featuredLayouts = ['application', 'portfolio', 'scholar'];
+export function singleColumnSections(resume) {
+  const layout = resume.design?.template;
+  if (layout === 'portfolio') return ['summary','projects','work','research','education','skills'];
+  if (layout === 'scholar') return ['education','research','projects','work','summary','skills'];
+  if (layout === 'application' || (resume.sectionOrder === 'application' && layout !== 'sidebar')) return ['summary','education','work','projects','research','skills'];
+  return null;
+}
 export const resumeTemplates = [
   { id: 'classic', name: '经典商务', description: '居中页眉 · 细线分节', tag: '通用', defaults: classic },
   { id: 'modern', name: '现代简约', description: '左对齐 · 清晰的黑体层级', tag: '产品 / 运营', defaults: { ...classic, font: 'sans', headingSize: 12, nameSize: 25, lineHeight: 1.65, sectionGap: 26, margin: 18 } },
   { id: 'editorial', name: '编辑叙事', description: '侧边章节 · 留白与衬线', tag: '业务 / 策略', defaults: { ...classic, headingSize: 11.5, nameSize: 28, lineHeight: 1.75, sectionGap: 28, margin: 18 } },
   { id: 'sidebar', name: '清晰双栏', description: '经历为主 · 教育能力侧列', tag: '信息分层', defaults: { ...classic, font: 'sans', fontSize: 10, headingSize: 12, nameSize: 24, lineHeight: 1.7, paragraphGap: 6, sectionGap: 24, margin: 15 } },
   { id: 'compact', name: '紧凑专业', description: '精简页眉 · 更紧凑的节奏', tag: '经历较多', defaults: { ...classic, font: 'sans', fontSize: 10, headingSize: 11.5, nameSize: 21, lineHeight: 1.5, paragraphGap: 4, sectionGap: 17, margin: 13 } },
+  { id:'application', name:'单页投递', description:'同排岗位与日期，细线分节', tag:'实习 / 校招', defaults:application },
+  { id:'portfolio', name:'项目纪要', description:'项目在前，交付要点分组', tag:'产品 / 运营', defaults:{...application, nameSize:23, sectionGap:18, lineHeight:1.55} },
+  { id:'scholar', name:'研究简历', description:'教育与研究在前，宋体分节', tag:'研究 / 技术', defaults:{...application, font:'serif', headingSize:13, lineHeight:1.6, sectionGap:18, margin:16} },
 ];
 export function templateDesign(id) {
   const template = resumeTemplates.find(item => item.id === id) || resumeTemplates[0];

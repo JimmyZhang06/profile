@@ -6,6 +6,10 @@
 .document-delete-summary small, .document-trash-item small { display: block; color: var(--text-muted); line-height: 1.8; font-size: 12px; }
 .document-trash-note { font-size: 14px; line-height: 1.8; color: var(--text-secondary); margin: 22px 0; }
 .document-trash-search input { min-width: 0; width: 100%; }
+.trash-confirmation { border:1px solid var(--border-strong); border-radius:12px; padding:16px 18px; margin-bottom:16px; background:var(--surface-subtle); }
+.trash-confirmation h2 { font-size:16px; margin:0; }
+.trash-confirmation p { color:var(--text-secondary); font-size:14px; line-height:1.65; margin:6px 0 14px; }
+.trash-confirmation > div { display:flex; flex-wrap:wrap; gap:8px; }
 .document-trash-count { color: var(--text-secondary); font-size: 13px; margin-block: 18px 8px; }
 .document-trash-item { display: flex; gap: 16px; align-items: center; padding: 22px 0; border-bottom: 1px solid var(--border-subtle); }
 .document-trash-item .button { flex-shrink: 0; font-size: 13px; }

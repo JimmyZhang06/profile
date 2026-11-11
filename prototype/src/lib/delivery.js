@@ -41,17 +41,7 @@ export function deliveryMaterials(projects, example, projectChoices = {}, scopeC
   }));
   return { chosen, scopes };
 }
-export const deliveryDesign = () => ({
-  ...templateDesign("compact"),
-  font: "sans",
-  fontSize: 11,
-  headingSize: 12,
-  nameSize: 22,
-  lineHeight: 1.5,
-  paragraphGap: 4,
-  sectionGap: 16,
-  margin: 15,
-});
+export const deliveryDesign = () => templateDesign("application");
 export function deliveryProfile(value, excludedRecords = []) {
   const keys = [...profileTextKeys, "profileVersion", "contactItems", ...recordSections.map((s) => s.key)];
   const personal = normalizeProfile(Object.fromEntries(

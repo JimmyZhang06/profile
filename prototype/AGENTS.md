@@ -1,5 +1,9 @@
 # Prototype Instructions
 
+## Importing existing resumes and reading density (2026-11-11)
+
+Offer Word and PDF import from New Resume and the personal archive. Read files on the device, let the user correct the extracted sections and keep unmatched wording. Save a separate editable resume, and add material to the archive only when chosen. New templates should feel compact and comfortable on A4: use readable body text, restrained spacing within an entry, stronger spacing between entries and visible dates. Preserve existing released layouts when adding alternatives.
+
 ## Self-service application workflow (2026-11-11)
 
 A user should be able to complete each application inside the site. New Resume opens JD and material selection. Generated and existing drafts open the conversation and editable paper, with a live A4 fit check for delivery drafts. In final review let the user follow a check to its field, compare source-backed wording, choose which experiences appear and adjust typography. Keep manual wording and source records intact during automatic fitting. Distinguish evidence for visible wording from evidence for an omitted or edited passage. Verify the complete route through the ordinary UI, including a near-limit draft printed to a single text-based PDF.
@@ -148,7 +152,7 @@ The Library categories must reuse the same `CurvedTabs` component as Settings, i
 
 ## Resume deletion and recovery (2026-10-31)
 
-The user requests a way to delete resumes. Provide deletion from the document-title menu through an in-page confirmation, then move the whole document to a recoverable Trash. Preserve its content, design, composer, messages, versions and source snapshot; never remove archive originals or other documents. Trash is reachable from the sidebar and supports search and restore-and-open. Deleting the final active resume shows a new-document entry point without silently creating another persisted resume; archive editing remains available but applying to a nonexistent resume is disabled. Archived documents survive cloud sync and backup imports, including blank documents that were explicitly deleted. Stop in-flight generation before deletion and prevent late callbacks from editing archived documents. Permanent deletion and automatic purging are not part of this flow.
+The user requests a way to delete resumes. Provide deletion from the document-title menu through an in-page confirmation, then move the whole document to a recoverable Trash. Preserve its content, design, composer, messages, versions and source snapshot; never remove archive originals or other documents. Trash is reachable from the sidebar and supports search and restore-and-open. Deleting the final active resume shows a new-document entry point without silently creating another persisted resume; archive editing remains available but applying to a nonexistent resume is disabled. Archived documents survive cloud sync and backup imports, including blank documents that were explicitly deleted. Stop in-flight generation before deletion and prevent late callbacks from editing archived documents. Emptying Trash is an explicit, separate action with an inline confirmation covering all archived resumes, including those outside the search filter. Remove only the confirmed snapshots and retain a valid empty workspace across cloud saves and reloads.
 
 ## Sidebar hierarchy refinement (2026-10-31)
 

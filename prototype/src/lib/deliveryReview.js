@@ -39,6 +39,7 @@ export function reviewFields(r) {
     for (const i of (getProjectBullets(r,id).length ? projectPointIndices(r,id) : [0]))
       add(id + ':' + i, fieldLabel(r, id + ':' + i));
   add('skills', '专业能力');
+  if (r.additional) add('additional','补充信息');
   return options;
 }
 

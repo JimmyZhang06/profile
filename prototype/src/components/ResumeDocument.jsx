@@ -1,8 +1,8 @@
-import { forwardRef } from 'react';
+import { Fragment, forwardRef } from 'react';
 import { IconPlus } from '@tabler/icons-react';
 import { fieldLabel, fieldValue } from '../lib/workspace.js';
 import { projectPointIndices } from '../lib/projects.js';
-import { getResumeDesign, resumeDesignStyle } from '../lib/resumeDesign.js';
+import { getResumeDesign, resumeDesignStyle, singleColumnSections } from '../lib/resumeDesign.js';
 import { marksForField, textSegments } from '../lib/richText.js';
 import { contactLabel, visibleContacts, visibleRecords } from '../lib/profile.js';
 
@@ -64,13 +64,15 @@ export const ResumeDocument = forwardRef(function ResumeDocument({ resume: r, se
     <div className="resume-line"><Editable {...props} field="school" as="h3" placeholder="学校名称" /><Editable {...props} field="educationPeriod" className="resume-date" placeholder="起止时间" /></div><Editable {...props} field="major" placeholder="专业与学历" />
   </Section>;
   const skills = (!readOnly || r.skills?.trim()) && <Section title="专业能力" className="resume-skills-section"><Editable {...props} field="skills" placeholder="写下与岗位相关的能力、工具或证书" /></Section>;
+  const order = singleColumnSections(r), sections = {summary, education, work, projects, research, skills};
   return <article ref={ref} className={`resume-page resume-document template-${design.template} font-${design.font} ${className}`} style={{ ...resumeDesignStyle(r), ...style }} aria-label={readOnly ? undefined : '简历预览'}>
     <header className="resume-intro">
       <Editable {...props} field="name" as="h1" placeholder="你的姓名" />
       <Editable {...props} field="target" className="resume-target" placeholder="求职方向" />
       {Array.isArray(r.contactItems) ? <div className="resume-contact resume-contacts">{visibleContacts(r).map(item => <span className="resume-contact-item" key={item.id}>{item.label ? <span>{item.label}：</span> : null}<Editable {...props} field={item.id + ':value'} label={contactLabel(item)} as="span" /></span>)}</div> : <Editable {...props} field="contact" className="resume-contact" placeholder="联系方式 / 城市" />}
     </header>
-    {r.sectionOrder === 'application' && design.template !== 'sidebar' ? <div className="resume-columns application-order"><div className="resume-main">{summary}{education}{work}{projects}{research}{skills}</div></div>
+    {order ? <div className="resume-columns application-order"><div className="resume-main">{order.map(key => <Fragment key={key}>{sections[key]}</Fragment>)}</div></div>
       : <div className="resume-columns"><div className="resume-main">{summary}{projects}{research}{work}</div><div className="resume-aside">{education}{skills}</div></div>}
+    {(r.additional || editing?.field === 'additional') && <Section title="补充信息"><Editable {...props} field="additional" /></Section>}
   </article>;
 });
