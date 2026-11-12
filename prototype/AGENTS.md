@@ -12,6 +12,8 @@ Use the shared custom date and month picker for Offer terms, comparison periods 
 
 Show what a salary leaves for everyday life through editable city costs, housing choices and personal savings goals, with dated references and clearly identified take-home pay.
 
+Keep the Offer header's city budget entry compact and the salary reference as a text link, with 12px between them and enough room for the title on mobile.
+
 ## Importing existing resumes and reading density (2026-11-11)
 
 Offer Word and PDF import from New Resume and the personal archive. Read files on the device, let the user correct the extracted sections and keep unmatched wording. Save a separate editable resume, and add material to the archive only when chosen. New templates should feel compact and comfortable on A4: use readable body text, restrained spacing within an entry, stronger spacing between entries and visible dates. Preserve existing released layouts when adding alternatives.

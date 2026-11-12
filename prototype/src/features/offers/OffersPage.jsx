@@ -319,8 +319,14 @@ function OfferWorkspace({ owner, account, search, onBack }) {
   return (
     <Page title={isLiving ? "城市生活预算" : "Offer 收入测算"} className="career-page offers-page" onBack={onBack}
       description={isLiving ? "看看一份收入，在想去的城市能怎样安排生活。" : "按录用条款估算到手收入，或比较两份报价。"}
-      actions={<><WorkspaceLink className="button button-secondary" href={alternateHref}>{isLiving ? "返回收入测算" : "城市生活预算"}</WorkspaceLink>
-        {!isLiving && <WorkspaceLink className="button button-secondary" href={salaryReferenceLink({region:draft.region,kind:draft.kind,origin:'offer'})}>薪酬参考</WorkspaceLink>}</>}
+      actions={<nav className="offer-heading-actions" aria-label="收入相关页面">
+        <WorkspaceLink className="button button-secondary" href={alternateHref}>
+          {isLiving ? "返回收入测算" : "城市生活预算"}
+        </WorkspaceLink>
+        {!isLiving && <WorkspaceLink className="offer-reference-link" href={salaryReferenceLink({region:draft.region,kind:draft.kind,origin:'offer'})}>
+          薪酬参考
+        </WorkspaceLink>}
+      </nav>}
       navigation={<CurvedTabs id="offer-plan" label="私人方案" items={isLiving ? planTabs.slice(0, 2) : planTabs} value={tab} onChange={next => {
         setCompare(next === "compare");
         if (next !== "compare") setActive(next === "b" ? 1 : 0);
