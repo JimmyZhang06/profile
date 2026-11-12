@@ -53,9 +53,14 @@ test("private offer persistence is owner-bound, versioned and independent from r
   );
   const plan = emptyOffer("虚构测试方案");
   plan.start = "2026-01-01";
+  plan.livingBudget = { city: "shenzhen", wallets: { CN: { net: 8000, goal: 1500 } },
+    places: { shenzhen: { shared: 1600, daily: 2100, fixed: 100 } } };
   const { item } = await route(a, "/api/cloud/offers", "POST", { plan });
   assert.equal(item.revision, 1);
   assert.equal(item.snapshot.algorithm, "offers-1.0.0");
+  assert.deepEqual((await route(a, "/api/cloud/offers/" + item.id)).item.data.livingBudget, plan.livingBudget);
+  await assert.rejects(() => route(a, "/api/cloud/offers", "POST", { plan: { ...plan, livingBudget: { city: "invalid" } } }),
+    (e) => e.status === 400);
   assert.equal((await route(b, "/api/cloud/offers")).items.length, 0);
   await assert.rejects(
     () => route(b, "/api/cloud/offers/" + item.id),

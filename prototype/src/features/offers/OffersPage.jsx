@@ -5,6 +5,7 @@ import { WorkspaceLink } from "../../components/ui/WorkspaceLink.jsx";
 import { DateField } from "../../components/ui/DateField.jsx";
 import { Check } from "./OfferFields.jsx";
 import { OfferTerms } from "./OfferTerms.jsx";
+import { LivingBudget } from "./LivingBudget.jsx";
 import { cloudRequest } from "../../lib/cloudClient.js";
 import { readOpportunityRef } from "../../../shared/opportunityOffer.mjs";
 import { compensationText } from "../opportunities/opportunityClient.js";
@@ -61,6 +62,16 @@ export default function OffersPage({ account, route, onBack }) {
   return <OfferWorkspace key={owner} owner={owner} account={account} search={route.search} onBack={onBack} />;
 }
 function OfferWorkspace({ owner, account, search, onBack }) {
+  const isLiving = new URLSearchParams(search).get("view") === "living";
+  const sourceRef = readOpportunityRef(search);
+  const opportunityId = sourceRef?.id, opportunityVersion = sourceRef?.version;
+  const viewParams = new URLSearchParams();
+  if (sourceRef) {
+    viewParams.set("opportunity", opportunityId);
+    viewParams.set("version", String(opportunityVersion));
+  }
+  if (!isLiving) viewParams.set("view", "living");
+  const alternateHref = "/offers" + (viewParams.size ? "?" + viewParams : "");
   const termsRef=useRef(null), cardPositions=useRef(['quote','quote']), editMonths=useRef(['','']);
   const revealTerm=(section,period)=>termsRef.current?.reveal(section,period);
   function resetCards(index) {
@@ -76,7 +87,7 @@ function OfferWorkspace({ owner, account, search, onBack }) {
   const [active, setActive] = useState(initial?.active === 1 ? 1 : 0),
     [scenario, setScenario] = useState(initial?.scenario === "fixed" ? "fixed" : "target"),
     [compare, setCompare] = useState(initial?.compare === true);
-  const tab = compare ? "compare" : active ? "b" : "a";
+  const tab = compare && !isLiving ? "compare" : active ? "b" : "a";
   const [ruleSets, setRuleSets] = useState(
       () => initial?.ruleSets || [RULESET, RULESET],
     ),
@@ -143,9 +154,8 @@ function OfferWorkspace({ owner, account, search, onBack }) {
   useEffect(() => {
     const controller = new AbortController();
     setSource(null); setSourceNotice(""); setSourceAccepted(false); setImportTarget(null);
-    const ref = readOpportunityRef(search);
-    if (ref)
-      cloudRequest("public/opportunities/" + encodeURIComponent(ref.id), {
+    if (opportunityId)
+      cloudRequest("public/opportunities/" + encodeURIComponent(opportunityId), {
         signal: controller.signal,
       })
         .then(({ item }) => {
@@ -154,9 +164,9 @@ function OfferWorkspace({ owner, account, search, onBack }) {
             return;
           }
           setSource(item);
-          if (item.version !== ref.version)
+          if (item.version !== opportunityVersion)
             setSourceNotice(
-              item.version > ref.version
+              item.version > opportunityVersion
                 ? "公开机会已有新版本。请核对当前条款后再复制；原链接的版本不会自动采用。"
                 : "公开版本与链接引用不一致，请核对当前条款后再复制。",
             );
@@ -166,7 +176,7 @@ function OfferWorkspace({ owner, account, search, onBack }) {
             setSourceNotice("公开机会暂不可用，可直接手动录入。");
         });
     return () => controller.abort();
-  }, [search]);
+  }, [opportunityId, opportunityVersion]);
   function change(key, value) {
     setPlans((ps) =>
       ps.map((p, i) => (i === active ? { ...p, [key]: value } : p)),
@@ -307,10 +317,11 @@ function OfferWorkspace({ owner, account, search, onBack }) {
     );
   }
   return (
-    <Page title="Offer 收入测算" className="career-page offers-page" onBack={onBack}
-      description="按录用条款估算到手收入，或比较两份报价。"
-      actions={<WorkspaceLink className="button button-secondary" href={salaryReferenceLink({region:draft.region,kind:draft.kind,origin:'offer'})}>薪酬参考</WorkspaceLink>}
-      navigation={<CurvedTabs id="offer-plan" label="私人方案" items={planTabs} value={tab} onChange={next => {
+    <Page title={isLiving ? "城市生活预算" : "Offer 收入测算"} className="career-page offers-page" onBack={onBack}
+      description={isLiving ? "看看一份收入，在想去的城市能怎样安排生活。" : "按录用条款估算到手收入，或比较两份报价。"}
+      actions={<><WorkspaceLink className="button button-secondary" href={alternateHref}>{isLiving ? "返回收入测算" : "城市生活预算"}</WorkspaceLink>
+        {!isLiving && <WorkspaceLink className="button button-secondary" href={salaryReferenceLink({region:draft.region,kind:draft.kind,origin:'offer'})}>薪酬参考</WorkspaceLink>}</>}
+      navigation={<CurvedTabs id="offer-plan" label="私人方案" items={isLiving ? planTabs.slice(0, 2) : planTabs} value={tab} onChange={next => {
         setCompare(next === "compare");
         if (next !== "compare") setActive(next === "b" ? 1 : 0);
       }} />}>
@@ -362,7 +373,7 @@ function OfferWorkspace({ owner, account, search, onBack }) {
           {notice}
         </p>
       )}
-      {compare ? (
+      {isLiving ? <LivingBudget plan={draft} result={result} onChange={v => change("livingBudget", v)} /> : compare ? (
         <section className="offer-comparison">
           <header className="offer-section-head"><h2>比较两份方案</h2><ScenarioSwitch value={scenario} onChange={setScenario} /></header>
           <Check
@@ -504,7 +515,7 @@ function OfferWorkspace({ owner, account, search, onBack }) {
             ),
         )}
       </section>
-      <details className="offer-rules">
+      {!isLiving && <details className="offer-rules">
         <summary>规则来源与适用范围 · {rules.version}</summary>
         <p>
           {ruleNotice ||
@@ -534,7 +545,7 @@ function OfferWorkspace({ owner, account, search, onBack }) {
             </li>
           ))}
         </ul>
-      </details>
+      </details>}
       </div>
     </Page>
   );

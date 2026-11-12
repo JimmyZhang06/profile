@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { one, query } from "./database.mjs";
 import { assert, audit } from "./security.mjs";
+import { validLivingBudget } from "../../src/features/offers/livingBudget.mjs";
 import {
   calculateOffer,
   emptyOffer,
@@ -75,6 +76,8 @@ export function validateOffer(plan) {
     else if (typeof v === "string") assert(v.length <= 4000, 400, "字段过长");
   };
   checkNumbers(plan);
+  if (plan.livingBudget !== undefined)
+    assert(validLivingBudget(plan.livingBudget), 400, "生活预算的城市、金额或收入口径不正确");
   assert(
     Number.isInteger(Number(plan.payOffset)) &&
       Number(plan.payOffset) <= 12 &&

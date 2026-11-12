@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { calculateLiving, validLivingBudget } from "../src/features/offers/livingBudget.mjs";
+import { livingCities } from "../src/features/offers/livingReferences.mjs";
 import {
   calculateOffer,
   compareOffers,
@@ -15,6 +17,87 @@ import {
   offerDraftKey,
   readOfferDrafts,
 } from "../src/features/offers/offerDrafts.mjs";
+
+test("living budget keeps unknown costs and pay distinct from zero and compares actual housing choices", () => {
+  const p = emptyOffer();
+  const run = () => calculateLiving(p, { months: [] });
+  assert.equal(run().balance, null);
+  p.livingBudget = { city: "shenzhen", wallets: { CN: { net: 8000, goal: 3000 } },
+    places: { shenzhen: { shared: 1800, solo: 3500, daily: 2500, fixed: 500 } } };
+  let b = run();
+  assert.equal(b.balance, 320000);
+  assert.equal(b.rentLimit, 200000);
+  assert.equal(b.afterGoal, 20000);
+  assert.equal(b.rentShare, 23);
+  assert.equal(b.rentChange, 170000);
+  p.livingBudget.places.shenzhen.housing = "solo";
+  assert.equal(run().balance, 150000);
+  p.livingBudget.city = "custom";
+  assert.equal(run().rent, null);
+  assert.equal(run().balance, null);
+  p.livingBudget.places.custom = { shared: 0, daily: 0, fixed: 0 };
+  p.livingBudget.wallets.CN.net = 0;
+  assert.equal(run().balance, 0);
+  assert.equal(run().rentShare, null);
+  p.livingBudget.places.custom.daily = 300;
+  assert.equal(run().balance, -30000);
+  p.livingBudget.city = "kowloon";
+  assert.equal(run().income.amount, null);
+  assert.equal(run().goal, null);
+  assert.equal(run().rent, 440 * 18 * 100);
+  assert.equal(run().fixed, 39800);
+  assert.equal(run().daily, 900500);
+  p.livingBudget.city = "shenzhen";
+  assert.equal(run().rent, 350000);
+});
+
+test("living budget can reuse a specific payroll month and marks incomplete deductions or Hong Kong tax reserves", () => {
+  const p = { ...emptyOffer(), region: "HK", currency: "HKD", salary: 18000 };
+  const noPayroll = { months: [] };
+  let b = calculateLiving(p, noPayroll);
+  assert.equal(b.income.mode, "offer");
+  assert.equal(b.income.amount, 1800000);
+  assert.equal(b.income.beforeDeductions, true);
+  p.livingBudget = { wallets: { HK: { deductions: 1000 } } };
+  assert.equal(calculateLiving(p, noPayroll).income.amount, 1700000);
+  const payroll = { months: [
+    { month: "2026-08", items: [{}], cash: 1830000 },
+    { month: "2026-09", items: [{}], cash: 0 },
+    { month: "2026-10", items: [{}], cash: null },
+  ] };
+  let wallet = p.livingBudget.wallets.HK;
+  b = calculateLiving(p, payroll);
+  assert.equal(b.income.amount, 1830000);
+  assert.equal(b.income.beforeDeductions, true);
+  wallet.reserve = 1300;
+  assert.equal(calculateLiving(p, payroll).income.amount, 1700000);
+  wallet.month = "2026-09"; wallet.reserve = 0;
+  assert.equal(calculateLiving(p, payroll).income.amount, 0);
+  wallet.month = "2026-10";
+  assert.equal(calculateLiving(p, payroll).income.amount, null);
+  wallet.mode = "gross"; wallet.gross = 300; wallet.deductions = 310;
+  assert.equal(calculateLiving(p, payroll).income.amount, null);
+  wallet.deductions = 0;
+  assert.equal(calculateLiving(p, payroll).income.beforeDeductions, false);
+  delete wallet.mode; wallet.net = 37.42;
+  assert.equal(calculateLiving(p, payroll).income.amount, 3742);
+  p.livingBudget.city = "beijing";
+  assert.equal(calculateLiving(p, payroll).income.amount, null);
+  assert.equal(calculateLiving(p, payroll).income.hasOffer, false);
+});
+
+test("living budget rejects malformed private extensions and an unlisted workplace has no assumed rent", () => {
+  assert.ok(validLivingBudget({ city: "custom:虚构市", places: { "custom:虚构市": { housing: "free", daily: 0 } } }));
+  for (const invalid of [null, [], { city: "unknown" }, { wallets: null }, { places: [] },
+    { wallets: { CN: { gross: -1 } } }, { wallets: { HK: { month: "2026-13" } } },
+    { places: { shenzhen: { shared: "2000" } } }, { city: "custom:"+"a".repeat(61) }])
+    assert.equal(validLivingBudget(invalid), false);
+  const p = { ...emptyOffer(), city: "虚构市" };
+  assert.equal(calculateLiving(p, { months: [] }).rent, null);
+  assert.equal(livingCities.filter(c => c.region === "CN" && c.rent).length, 50);
+  assert.equal(new Set(livingCities.map(c => c.id)).size, livingCities.length);
+  assert.equal(calculateLiving({ ...p, city: "重庆市" }, { months: [] }).rent, 89050);
+});
 
 test("public opportunity confirmation creates clean internship terms and keeps raw currency/unit/range; drafts isolate owners", () => {
   const item = {

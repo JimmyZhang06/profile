@@ -10,6 +10,8 @@ In the Offer calculator, show one input card at a time. Swipe horizontally throu
 
 Use the shared custom date and month picker for Offer terms, comparison periods and opportunity deadlines. Open it inline, support keyboard and manual entry, and keep the stored civil dates in their existing ISO format.
 
+Show what a salary leaves for everyday life through editable city costs, housing choices and personal savings goals, with dated references and clearly identified take-home pay.
+
 ## Importing existing resumes and reading density (2026-11-11)
 
 Offer Word and PDF import from New Resume and the personal archive. Read files on the device, let the user correct the extracted sections and keep unmatched wording. Save a separate editable resume, and add material to the archive only when chosen. New templates should feel compact and comfortable on A4: use readable body text, restrained spacing within an entry, stronger spacing between entries and visible dates. Preserve existing released layouts when adding alternatives.
