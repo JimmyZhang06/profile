@@ -10,9 +10,10 @@
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "icons": "node scripts/generate-app-icons.mjs",
     "preview": "vite preview",
-    "test": "node --test tests/revision-scroll.test.mjs tests/delivery.test.mjs tests/workspace.test.mjs tests/navigation.test.mjs tests/documents.test.mjs tests/projects.test.mjs tests/interaction.test.mjs tests/formatting.test.mjs tests/profile.test.mjs tests/experience-preview.test.mjs tests/avatar.test.mjs tests/cloud.test.mjs tests/cloud-sync.test.mjs tests/deployment.test.mjs tests/admin-setup.test.mjs tests/webapp.test.mjs tests/model-domains.test.mjs",
+    "test": "node --test tests/revision-scroll.test.mjs tests/delivery.test.mjs tests/workspace.test.mjs tests/navigation.test.mjs tests/documents.test.mjs tests/projects.test.mjs tests/interaction.test.mjs tests/formatting.test.mjs tests/profile.test.mjs tests/experience-preview.test.mjs tests/avatar.test.mjs tests/cloud.test.mjs tests/cloud-sync.test.mjs tests/deployment.test.mjs tests/admin-setup.test.mjs tests/webapp.test.mjs tests/model-domains.test.mjs tests/opportunities.test.mjs tests/offers-engine.test.mjs tests/offers-route.test.mjs tests/career-handoff.test.mjs tests/career-benchmarks.test.mjs",
     "test:models": "node --test tests/model-domains.test.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
+    "test:offer-cards": "node tests/browser/offer-cards.mjs",
     "dev:client": "vite",
     "test:cloud": "node --test tests/cloud.test.mjs tests/cloud-sync.test.mjs tests/admin-setup.test.mjs"
   },

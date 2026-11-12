@@ -1,5 +1,15 @@
 # Prototype Instructions
 
+## Opportunity board and offer calculations (2026-11-12)
+
+The opportunity board, Offer calculator and salary references are pages of the personal workspace. Use its sidebar, mobile navigation drawer, page header and theme. Keep direct links and browser history usable while the editor stays mounted. On desktop aim to show the key terms and estimate together and fit the regional overview in one screen. Expand optional details in place and keep mobile controls readable.
+
+Provide direct navigation to both the internship board and the private Offer calculator. An offer can start from an empty form or from the reviewed version of a public posting. Carry only the stable posting ID and version in the link. Preserve the posted pay range for the user's confirmation and keep subsequent negotiation, deductions and income in their own workspace. Market reports should identify geography, currency, period, population and statistic. Keep Hong Kong pay and contribution rules distinct from the mainland calculation. Preserve single-column mobile reading, keyboard access and the shared monochrome appearance across both paths.
+
+In the Offer calculator, show one input card at a time. Swipe horizontally through the quote, contract, bonuses, contributions, tax and monthly adjustments, with direct navigation for keyboard and mouse. Keep page scrolling vertical, the live estimate outside the deck, and edits and card position independent for the two plans. Links from missing terms should open the relevant card and focus its field.
+
+Use the shared custom date and month picker for Offer terms, comparison periods and opportunity deadlines. Open it inline, support keyboard and manual entry, and keep the stored civil dates in their existing ISO format.
+
 ## Importing existing resumes and reading density (2026-11-11)
 
 Offer Word and PDF import from New Resume and the personal archive. Read files on the device, let the user correct the extracted sections and keep unmatched wording. Save a separate editable resume, and add material to the archive only when chosen. New templates should feel compact and comfortable on A4: use readable body text, restrained spacing within an entry, stronger spacing between entries and visible dates. Preserve existing released layouts when adding alternatives.
@@ -211,3 +221,8 @@ Store the domain policy in platform_settings with revision checks and audit hist
 The user requests calmer, horizontally swipeable stacked cards for AI revisions. Group suggestions within each assistant reply, showing one complete card with restrained backing outlines, a progress counter and previous/next controls. Use native swipe/trackpad scrolling inside the deck only; the conversation and page must not overflow horizontally. Preserve vertical reading, text selection, keyboard navigation and reduced-motion preferences. A single suggestion stays a plain card. Keep per-card comparison state, status, adoption, dismissal, evidence and document-location actions; switching cards never changes resume content. Adapt to the current card's height without an inner vertical scroller or a jump to the conversation bottom during review. Do not add autoplay or merge separate replies. Verify with fictional local data.
 
 The user reports the deck sticking during swipes. Let the native scroll and snap finish before changing active-card height, inertness or focus. Never reset scrollTop while horizontal momentum is active; even writing zero can interrupt WebKit scrolling. Use scrollend with a touch-aware quiet-period fallback, defer resize alignment during gestures, and accumulate rapid button/keyboard navigation against its pending destination. Keep inactive cards at their natural height for measurement, retain text selection and vertical scroll chaining, and do not claim physical-iPhone verification from desktop emulation.
+## Salary references in the career workspace (2026-11-12)
+
+Keep the opportunity, tailored résumé and private Offer calculator connected in the existing sidebar. Make the next useful action visible and keep optional filters, payroll assumptions and additional income fields out of the initial view. Give an immediate result when inputs support it; do not fill missing contract terms or payroll deductions with guesses. Group repeated monthly questions and link each to its input.
+
+Use interactive charts backed by the original salary reports. Preserve geography, period, population, currency, pay interval, statistic and source per observation. In distribution views distinguish the median, P25–P75 and P10–P90; keep arithmetic means, recruiting ranges and programme allowances distinct. Offer comparisons are optional and private; never put amounts in navigation URLs or use them as public observations. Provide a keyboard/touch-accessible exact-value table and verify narrow layouts.

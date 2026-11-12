@@ -1,3 +1,5 @@
+import { createLocalOcrWorker } from './localOcr.js';
+
 const cjk = /[\u3000-\u9fff]/u;
 function paragraphs(lines) {
   const result = [];
@@ -94,12 +96,10 @@ export async function readPdf(buffer,signal,onProgress) {
           recognizing = n;
           onProgress('正在准备中英文文字识别 · 第 ' + n + ' 页');
           if (!ocr) {
-            const {createWorker} = await import('tesseract.js');
             signal.throwIfAborted();
-            const path = new URL(base+'ocr/',location.origin);
-            ocr = await createWorker(['chi_sim','eng'],1,{workerPath:new URL('worker.js',path).href,
-              corePath:path.href.slice(0,-1),langPath:path.href.slice(0,-1),workerBlobURL:false,
-              logger:m => { if (!signal.aborted && m.status === 'recognizing text') onProgress('正在识别第 '+recognizing+' 页 · '+Math.round(m.progress*100)+'%'); }});
+            ocr = await createLocalOcrWorker(percent => {
+              if (!signal.aborted) onProgress('正在识别第 '+recognizing+' 页 · '+percent+'%');
+            });
           }
           signal.throwIfAborted();
           const scale = Math.min(2.5,2100/Math.max(viewport.width,viewport.height));

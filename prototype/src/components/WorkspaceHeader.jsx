@@ -12,7 +12,7 @@ export function WorkspaceHeader({ doc, saveState, edit, mobileView, onMobileView
   ];
   return <>
     <header className="workspace-header" aria-label="当前简历工具栏">
-      <IconButton className="mobile-navigation-button" label="打开简历列表" onClick={onNavigation}><IconMenu2 size={21} /></IconButton>
+      <IconButton className="mobile-navigation-button" label="打开工作区导航" onClick={onNavigation}><IconMenu2 size={21} /></IconButton>
       <div className="workspace-document">
         <Menu label="当前简历菜单" className="document-title-menu" icon={<IconFileText size={18} />} value={<span title={doc.title}>{doc.title}</span>} items={[
           { label: '重命名简历', icon: <IconPencil size={17} />, onClick: () => onOpen('rename') },

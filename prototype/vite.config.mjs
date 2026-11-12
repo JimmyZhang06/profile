@@ -33,6 +33,7 @@ export default defineConfig(({ mode }) => {
         ],
       },
       proxy: {
+        "/api/public": apiOrigin,
         "/api/cloud": apiOrigin,
         "/api/auth": apiOrigin,
         "/api/admin": apiOrigin,

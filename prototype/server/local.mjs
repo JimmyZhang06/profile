@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile, stat, realpath } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
+import { careerSectionForPath } from "../shared/careerPaths.mjs";
 
 // An explicit browser-only release. No database, mailer, authentication or model
 // proxy is initialized. Cloud production configuration remains fail-closed.
@@ -69,7 +70,7 @@ export async function createLocalApp(config) {
       if (!file) {
         // Only application routes get the SPA shell. Unknown assets and source
         // paths must not look like successful downloads.
-        if (!["/", "/admin", "/admin/"].includes(path))
+        if (!["/", "/admin", "/admin/"].includes(path) && !careerSectionForPath(path))
           return json(res, 404, { error: "页面不存在" });
         file = resolve(root, "index.html");
       }

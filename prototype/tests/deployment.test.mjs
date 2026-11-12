@@ -55,7 +55,7 @@ test("public browser-only server serves the release but blocks authentication, m
     await rm(dir, { recursive: true, force: true });
   });
   const base = "http://127.0.0.1:" + app.server.address().port;
-  for (const path of ["/", "/admin", "/admin/"]) {
+  for (const path of ["/", "/admin", "/admin/", "/opportunities", "/opportunities/post-123", "/offers?opportunity=post-123&version=2", "/market?region=HK"]) {
     const r = await fetch(base + path);
     assert.equal(r.status, 200);
     assert.equal(r.headers.get("x-frame-options"), "DENY");

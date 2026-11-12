@@ -80,7 +80,9 @@ export function mergeImportedWorkspace(
     if (!value || typeof value !== "object") return;
     if (typeof value.id === "string")
       mappings.set(value.id, mappings.get(value.id) || makeId());
-    for (const child of Object.values(value)) collect(child);
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== 'opportunitySource') collect(child);
+    }
   }
   collect(incoming.library);
   collect(incoming.documents);
@@ -100,7 +102,7 @@ export function mergeImportedWorkspace(
       return Object.fromEntries(
         Object.entries(value).map(([key, item]) => [
           mapped(key),
-          transform(item),
+          key === 'opportunitySource' ? clone(item) : transform(item),
         ]),
       );
     return typeof value === "string" ? mapped(value) : value;

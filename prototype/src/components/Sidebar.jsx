@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react';
-import { IconLayoutSidebar, IconEdit, IconSearch, IconBooks, IconSettings, IconFileText, IconUserCircle, IconDeviceDesktop, IconCloud, IconTrash, IconDots, IconPencil, IconX } from '@tabler/icons-react';
+import { IconLayoutSidebar, IconEdit, IconSearch, IconBooks, IconSettings, IconFileText, IconUserCircle, IconDeviceDesktop, IconCloud, IconTrash, IconDots, IconPencil, IconX, IconBriefcase, IconCalculator, IconChartBar } from '@tabler/icons-react';
+import { careerPages } from '../../shared/careerPaths.mjs';
 import { IconButton, Menu } from './ui/index.jsx';
 import { BrandLogo } from './BrandLogo.jsx';
 import { Avatar } from './account/Avatar.jsx';
+
+const careerIcons = { opportunities: IconBriefcase, offers: IconCalculator, market: IconChartBar };
 
 export function Sidebar({ state, saveState, account, page, accountOpen, isMobile, sidebarOpen = state.ui.sidebar, onHome, onToggle, onNew, onOpen, onSelect }) {
   const [search, setSearch] = useState('');
@@ -31,6 +34,14 @@ export function Sidebar({ state, saveState, account, page, accountOpen, isMobile
       {!expanded ? <IconButton label="展开侧栏" onClick={onToggle}><IconLayoutSidebar size={20} stroke={1.65} /></IconButton> : null}
       <button type="button" className={'nav-row new-document ' + (creating ? 'active' : '')} aria-current={creating ? 'page' : undefined} aria-label="新建岗位简历" data-tooltip={!expanded ? '新建岗位简历' : undefined} onClick={onNew}><IconEdit size={20} stroke={1.65} />{expanded ? <span>新建简历</span> : null}</button>
       <button type="button" className={'nav-row ' + (['library', 'profile', 'projects'].includes(page) ? 'active' : '')} aria-current={['library', 'profile', 'projects'].includes(page) ? 'page' : undefined} aria-label="资料库" data-tooltip={!expanded ? '资料库' : undefined} onClick={() => onOpen('library')}><IconBooks size={20} stroke={1.65} />{expanded ? <span>资料库</span> : null}</button>
+      <div className="sidebar-career-links">
+        {Object.entries(careerPages).map(([key, label]) => {
+          const Icon = careerIcons[key], active = page === key || (key === 'opportunities' && page === 'opportunity-start');
+          return <button key={key} type="button" className={'nav-row' + (active ? ' active' : '')}
+            aria-current={active ? 'page' : undefined} aria-label={label} data-tooltip={!expanded ? label : undefined}
+            onClick={() => onOpen(key)}><Icon size={20} stroke={1.65} />{expanded ? <span>{label}</span> : null}</button>;
+        })}
+      </div>
     </nav>
 
     {expanded ? <section className="sidebar-documents" aria-label="简历列表">

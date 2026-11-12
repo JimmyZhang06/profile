@@ -1,0 +1,75 @@
+.offer-terms {container:offer-terms / inline-size}
+.offer-deck-bar,.offer-deck-arrows,.offer-deck-footer,.offer-deck-index,.offer-card-head {display:flex;align-items:center}
+.offer-deck-bar {justify-content:space-between;gap:10px;margin:0 0 10px}
+.offer-deck-arrows {flex:none;gap:2px}
+.offer-deck-arrows .icon-button {width:34px;height:34px;color:var(--text-secondary)}
+.offer-deck-arrows .icon-button[aria-disabled=true] {opacity:.35;cursor:default;background:transparent}
+.offer-deck-count {font-size:12px;color:var(--text-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.offer-deck-count b {font-weight:600;color:var(--text-primary)}
+.offer-deck-viewport {
+  --deck-gap:10px;--deck-peek:12px;position:relative;display:flex;align-items:flex-start;gap:var(--deck-gap);
+  width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
+  scroll-snap-type:x mandatory;scrollbar-width:none;overflow-anchor:none;border-radius:12px;
+}
+.offer-deck-viewport::-webkit-scrollbar {display:none}
+.offer-deck-viewport::after {content:"";flex:0 0 var(--deck-peek)}
+.offer-deck-viewport.is-dragging {scroll-snap-type:none;cursor:grabbing}
+.offer-deck-card {
+  box-sizing:border-box;flex:0 0 calc(100% - var(--deck-peek) - var(--deck-gap));min-width:0;
+  scroll-snap-align:start;border:1px solid var(--border);border-radius:12px;padding:clamp(14px,2vw,19px);
+  background:var(--surface-card);color:var(--text-primary);
+}
+.offer-deck-card[aria-hidden=true] {background:var(--surface-subtle)}
+.offer-card-head {gap:11px;border-bottom:1px solid var(--border-subtle);padding-bottom:13px;margin:0 0 15px;cursor:grab;user-select:none}
+.is-dragging .offer-card-head {cursor:grabbing}
+.offer-card-head h3 {margin:0;font-size:16px;line-height:1.45;font-weight:620;color:var(--text-strong)}
+.offer-card-head p,.offer-card-fields p,.offer-empty-month p {margin:3px 0 0;font-size:13px;line-height:1.6;color:var(--text-secondary)}
+.offer-card-icon {display:grid;place-items:center;flex:none;width:35px;height:35px;border-radius:9px;background:var(--surface-muted);color:var(--text-strong)}
+.offer-card-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:14px 12px;min-width:0}
+.offer-card-flow {display:contents}
+.offer-card-fields :is(.offer-card-wide,.offer-check,details,p,fieldset:not(.offer-option-strip)) {grid-column:1/-1}
+.offer-card-fields :is(.offer-field .select-field,.select-field,.offer-field) {min-width:0}
+.offer-card-fields .offer-field input,.offer-card-fields .select-field-trigger {min-height:39px}
+.offer-card-fields > .button,.offer-card-fields .offer-card-flow > .button {justify-self:start}
+.offer-card-fields .offer-check {min-height:0;margin:0}
+.offer-card-fields :is(.offer-field > span,.select-field > label),.offer-option-strip legend {font-size:13px;font-weight:500;line-height:1.5;color:var(--text-secondary)}
+.offer-card-fields details {margin:0;border-block:1px solid var(--border-subtle);border-bottom:0}
+.offer-card-fields details + details {margin-top:-10px}
+.offer-card-fields details > summary {font-size:13px;min-height:38px}
+.offer-card-fields details[open] > summary {margin-bottom:5px}
+.offer-card-fields .offer-option-strip {min-width:0;padding:0;margin:0;border:0}
+.offer-option-strip legend {padding:0 0 5px}
+.offer-options {display:flex;min-height:39px;padding:3px;border-radius:8px;gap:2px;background:var(--surface-muted);border:1px solid var(--border-subtle)}
+.offer-options label {display:grid;place-items:stretch;position:relative;flex:1 1 0;min-width:0;cursor:pointer}
+.offer-options input {position:absolute;opacity:0;width:1px;height:1px}
+.offer-options span {display:grid;place-items:center;min-height:30px;text-align:center;padding:3px 2px;border-radius:5px;color:var(--text-secondary);font-size:12px;line-height:1.3;white-space:nowrap}
+.offer-options input:checked + span {background:var(--surface-card);box-shadow:0 0 0 1px var(--border);font-weight:600;color:var(--text-strong)}
+.offer-options input:focus-visible + span,.offer-terms :is(.offer-deck-viewport,.offer-deck-index button):focus-visible {outline:2px solid var(--text-primary);outline-offset:1px}
+.offer-quote-amount input {font-weight:580;font-variant-numeric:tabular-nums}
+.offer-bonus-entries {display:grid;gap:12px;justify-items:start;min-width:0}
+.offer-card-fields fieldset:not(.offer-option-strip) {margin:0;min-width:0;border:1px solid var(--border-subtle);border-radius:8px;padding:10px;display:grid;gap:10px}
+.offer-bonus-entries > fieldset {width:100%}
+.offer-card-fields fieldset:not(.offer-option-strip) > legend {padding-inline:5px;font-size:13px;font-weight:550}
+.offer-empty-month p {margin:0 0 12px}
+.offer-deck-footer {justify-content:space-between;gap:8px;margin-top:3px;color:var(--text-muted);font-size:12px}
+.offer-deck-index button {display:grid;place-items:center;min-width:22px;height:32px;background:none;border:0;border-radius:4px;padding:0;cursor:pointer}
+.offer-deck-index i {width:8px;height:4px;border-radius:4px;background:var(--border-strong)}
+.offer-deck-index button[aria-pressed=true] i {width:18px;background:var(--text-primary)}
+.offer-deck-announcement {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@container offer-terms (max-width:410px) {
+  .offer-deck-card {padding:14px}
+  .offer-card-fields {gap:12px 9px}
+  .offer-quote-amount,.offer-deck-card[data-card=quote] .offer-option-strip:nth-child(2) {grid-column:1/-1}
+  .offer-card-fields details .offer-card-fields,.offer-deck-card:is([data-card=tax],[data-card=contributions],[data-card=monthly]) .offer-card-fields {grid-template-columns:minmax(0,1fr)}
+  .offer-options span {font-size:12px}
+}
+@container offer-terms (max-width:325px) {
+  .offer-card-fields {grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:760px),(pointer:coarse) {
+  .offer-deck-arrows .icon-button {width:44px;height:44px}
+  .offer-options {min-height:44px}.offer-options span {min-height:36px}
+  .offer-deck-index button {min-width:26px;height:42px}
+  .offer-card-fields .offer-field input,.offer-card-fields .select-field-trigger {min-height:44px}
+  .offer-card-fields .offer-field input {font-size:16px}
+}

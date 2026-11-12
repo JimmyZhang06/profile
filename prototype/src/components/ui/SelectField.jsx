@@ -51,12 +51,16 @@ export function SelectField({ label, value, options, onChange, disabled = false,
     window.visualViewport?.addEventListener('scroll', place);
     const scroll = trigger.current.closest(scrollContainers);
     scroll?.addEventListener('scroll', place, { passive: true });
+    const deck = trigger.current.closest('[data-horizontal-deck]');
+    const closeOnSlide = () => setOpen(false);
+    deck?.addEventListener('scroll', closeOnSlide, { passive:true });
     return () => {
       document.removeEventListener('pointerdown', closeOutside);
       window.removeEventListener('resize', place);
       window.visualViewport?.removeEventListener('resize', place);
       window.visualViewport?.removeEventListener('scroll', place);
       scroll?.removeEventListener('scroll', place);
+      deck?.removeEventListener('scroll', closeOnSlide);
     };
   }, [expanded, place]);
   useEffect(() => {

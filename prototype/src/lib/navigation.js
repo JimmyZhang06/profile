@@ -3,6 +3,7 @@
 export function createNavigationGuard() {
   let dirty = false, pending = null;
   return {
+    get dirty() { return dirty; },
     setDirty(value) { dirty = value; },
     request(action) {
       if (dirty) { pending = action; return false; }

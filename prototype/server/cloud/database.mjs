@@ -19,15 +19,14 @@ export async function createDatabase(config) {
     db,
     dialect,
     async migrate() {
-      const source = await readFile(
-        new URL("./schema.sql", import.meta.url),
-        "utf8",
-      );
-      for (const statement of source
-        .split(";")
-        .map((s) => s.trim())
-        .filter(Boolean))
-        await query(db, statement);
+      await db.transaction().execute(async (tx) => {
+        for (const file of ["schema.sql", "opportunities.sql", "offers.sql"]) {
+          const source = await readFile(new URL(file, import.meta.url), "utf8");
+          for (const statement of source.split(";").map((s) => s.trim()).filter(Boolean)) {
+            await query(tx, statement);
+          }
+        }
+      });
     },
     close: () => db.destroy(),
   };

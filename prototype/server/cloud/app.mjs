@@ -22,6 +22,20 @@ import {
 import { listConnections, saveConnection, streamModel } from "./models.mjs";
 import { adminRoute, seedTemplates, publicTemplates } from "./admin.mjs";
 import { normalizeAvatar, storedAvatar } from "./avatar.mjs";
+import { opportunityRoute } from "./opportunities.mjs";
+import { offerRoute } from "./offers.mjs";
+
+const careerRoutes = new Map([
+  ["/api/public/opportunities", opportunityRoute],
+  ["/api/cloud/opportunity-submissions", opportunityRoute],
+  ["/api/cloud/opportunities", opportunityRoute],
+  ["/api/admin/opportunity-submissions", opportunityRoute],
+  ["/api/admin/opportunities", opportunityRoute],
+  ["/api/admin/opportunity-reports", opportunityRoute],
+  ["/api/public/offer-rules", offerRoute],
+  ["/api/cloud/offers", offerRoute],
+  ["/api/admin/offer-rules", offerRoute],
+]);
 
 export function json(res, status, data) {
   res.writeHead(status, {
@@ -198,7 +212,10 @@ export async function createCloudApp(config) {
         !(await auth.api.getSession({ headers: fromNodeHeaders(req.headers) }))
       )
         return json(res, 200, { user: null });
-      const actor = await identity(req, auth, db, {
+      const feature = careerRoutes.get(path.split("/").slice(0, 4).join("/"));
+      const isPublic = path.startsWith("/api/public/");
+      if (isPublic) assert(feature && req.method === "GET", 404, "接口不存在");
+      const actor = isPublic ? null : await identity(req, auth, db, {
         admin: isAdmin,
         stepUp: ![
           "/api/admin/verify",
@@ -206,7 +223,12 @@ export async function createCloudApp(config) {
           "/api/admin/gate",
         ].includes(path),
       });
-      await limit(db, "api:" + actor.user.id, 300, 60);
+      if (actor) await limit(db, "api:" + actor.user.id, 300, 60);
+      if (feature) {
+        const data = await feature({ db, config, actor, req, res, url, path, method: req.method, readBody });
+        if (!res.headersSent) json(res, 200, data);
+        return;
+      }
       const body = ["POST", "PUT", "DELETE"].includes(req.method)
         ? await readBody(req, path === "/api/cloud/account/avatar" ? 240000 : undefined)
         : {};

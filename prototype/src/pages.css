@@ -19,6 +19,21 @@
   background: var(--bg);
 }
 .workspace-page.page-wide { --page-width: 960px; }
+.workspace-page.career-page { --page-width: 1160px; container-type: inline-size; }
+.career-page .page-heading-actions .button { text-decoration: none; white-space: nowrap; }
+.career-page .page-heading { margin-bottom: 16px; }
+.career-page .curved-tabs { margin-bottom: 0; }
+@media (max-width: 760px) {
+  .workspace-page.career-page .page-heading {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title actions" "description description";
+    align-items: center; gap: 3px 10px; margin-bottom: 12px;
+  }
+  .career-page .page-heading > div:first-child { display: contents; }
+  .career-page .page-heading h1 { grid-area: title; }
+  .career-page .page-heading p { grid-area: description; margin: 0; }
+  .career-page .page-heading-actions { grid-area: actions; }
+  .career-page .page-heading-actions .button { min-height: 44px; font-size: 14px; }
+}
 .page-topbar {
   display: flex;
   align-items: center;

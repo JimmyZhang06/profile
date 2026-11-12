@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   IconLayoutDashboard,
   IconUsers,
@@ -14,6 +14,8 @@ import {
   IconRefresh,
   IconMail,
   IconLogout,
+  IconBriefcase,
+  IconCalculator,
 } from "@tabler/icons-react";
 import { BrandLogo } from "../BrandLogo.jsx";
 import { ThemeMenu } from "../ThemeMenu.jsx";
@@ -38,12 +40,17 @@ import {
   templateDesign,
 } from "../../lib/resumeDesign.js";
 
+const OpportunityAdminPage = lazy(() => import("../../features/opportunities/OpportunityAdminPage.jsx"));
+const OfferRulesPage = lazy(() => import("../../features/offers/OfferRulesPage.jsx"));
+
 const sections = [
   ["overview", "运行概览", IconLayoutDashboard],
   ["users", "用户与邀请", IconUsers],
   ["models", "AI 服务", IconPlug],
   ["mail", "邮件服务", IconMail],
   ["templates", "简历模板", IconLayout],
+  ["opportunities", "机会管理", IconBriefcase],
+  ["offer-rules", "薪酬规则", IconCalculator],
   ["usage", "使用记录", IconActivity],
   ["audit", "操作记录", IconHistory],
 ];
@@ -1229,6 +1236,22 @@ export default function AdminApp({ account }) {
     document.title = "管理后台 · 履历";
   }, []);
   useEffect(() => {
+    function followHash() {
+      const next = window.location.hash.slice(1) || "overview";
+      if (next === page) return;
+      if (dirty) {
+        history.replaceState(history.state, "", "#" + page);
+        setPending(next);
+      } else {
+        setPending(null);
+        setError("");
+        setPage(next);
+      }
+    }
+    window.addEventListener("hashchange", followHash);
+    return () => window.removeEventListener("hashchange", followHash);
+  }, [page, dirty]);
+  useEffect(() => {
     if (!dirty) return;
     const prevent = (e) => {
       e.preventDefault();
@@ -1396,6 +1419,10 @@ export default function AdminApp({ account }) {
                 <MailSettings {...shared} />
               ) : section === "templates" ? (
                 <Templates {...shared} />
+              ) : section === "opportunities" || section === "offer-rules" ? (
+                <Suspense fallback={<p role="status">正在读取管理页面…</p>}>
+                  {section === "opportunities" ? <OpportunityAdminPage {...shared} page={page} /> : <OfferRulesPage {...shared} page={page} />}
+                </Suspense>
               ) : ["usage", "audit"].includes(section) ? (
                 <Records type={section} api={api} />
               ) : (

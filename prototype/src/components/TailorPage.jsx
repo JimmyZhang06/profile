@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { IconArrowRight, IconFileText } from "@tabler/icons-react";
 import { Page, Button, Field } from "./ui/index.jsx";
+import { WorkspaceLink } from "./ui/WorkspaceLink.jsx";
 import { SelectField } from "./ui/SelectField.jsx";
 import { deliveryCallPlan, jobFromListing } from "../lib/deliverySelection.js";
 import { projectDetailFields, projectDetails } from "../lib/projects.js";
@@ -31,6 +32,7 @@ export function TailorPage({
   onManual,
   onImport,
   fromFile = false,
+  opportunitySource = null,
 }) {
   const [job, setJob] = useState(
     initialJob || { company: "", title: "", text: "" },
@@ -157,6 +159,7 @@ export function TailorPage({
           当前包含虚构示例资料，仅用于体验。正式投递前请替换为自己的真实经历。
         </p>
       ) : null}
+      {opportunitySource ? <div className="op-resume-source">来自机会广场 · {opportunitySource.company} · 公开版本 V{opportunitySource.version}。完成后保留此时的 JD 副本。<br/><WorkspaceLink href={'/opportunities/'+opportunitySource.id}>查看岗位与当前投递渠道</WorkspaceLink></div> : null}
       <fieldset disabled={busy} className="tailor-fields">
         <div className="field-grid">
           <Field label="岗位名称">

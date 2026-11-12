@@ -8,6 +8,7 @@
   .sidebar .wordmark > .brand-wordmark { font-size: 21px; }
   .sidebar .sidebar-top > .icon-button { width: 30px; height: 32px; color: var(--text-secondary); }
   .sidebar .sidebar-nav { gap: 2px; flex-shrink: 0; }
+  .sidebar-career-links { display: grid; gap: 2px; border-top: 1px solid var(--border-subtle); margin-top: 5px; padding-top: 5px; }
   .sidebar .nav-row { min-height: 40px; padding: 8px 10px; gap: 10px; font-size: 14px; border-radius: 7px; box-shadow: none; }
   .sidebar .nav-row > svg { flex-shrink: 0; }
   .sidebar .new-document { margin: 0; background: transparent; }

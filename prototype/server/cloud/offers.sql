@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS offer_plans (owner_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE, id TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, data JSONB NOT NULL, snapshot JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(owner_id,id));
+CREATE TABLE IF NOT EXISTS offer_rule_versions (id TEXT PRIMARY KEY, state TEXT NOT NULL CHECK(state IN ('draft','published')), revision INTEGER NOT NULL DEFAULT 1, data JSONB NOT NULL, created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), published_at TIMESTAMPTZ);
+CREATE INDEX IF NOT EXISTS offer_rule_published_idx ON offer_rule_versions(published_at);
