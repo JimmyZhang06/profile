@@ -34,7 +34,10 @@ export async function listConnections(db, owner) {
       "SELECT * FROM model_connections WHERE (owner_id=$1 AND scope='user') OR (scope='platform' AND enabled=TRUE) ORDER BY scope,id",
       [owner],
     )
-  ).map(safeConnection);
+  ).map(row => row.scope === "platform" ? {
+    id: row.id, source: "platform", enabled: row.enabled, name: "平台写作服务",
+    model: "", baseUrl: row.data.baseUrl, maxOutputTokens: row.data.maxOutputTokens,
+  } : safeConnection(row));
 }
 export async function saveConnection(
   db,

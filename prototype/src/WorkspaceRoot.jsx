@@ -4,6 +4,7 @@ import { useWorkspace } from "./hooks/useWorkspace.js";
 import { useCloudWorkspace } from "./hooks/useCloudWorkspace.js";
 import { cloudRequest } from "./lib/cloudClient.js";
 import { safeAvatar } from "./lib/avatar.js";
+import { STORAGE_KEY } from "./lib/workspace.js";
 import { Button } from "./components/ui/index.jsx";
 
 const AdminApp = lazy(() => import("./components/account/AdminApp.jsx"));
@@ -18,6 +19,7 @@ function CloudEditor({ account }) {
 }
 export function WorkspaceRoot() {
   const refreshSequence = useRef(0);
+  const initialCheck = useRef(true);
   const [owner, setOwner] = useState(() => {
       try {
         const saved = JSON.parse(localStorage.getItem(ACCOUNT_KEY) || "null");
@@ -36,17 +38,20 @@ export function WorkspaceRoot() {
   async function refresh() {
     const sequence = ++refreshSequence.current;
     try {
-      const data = await cloudRequest("cloud/me");
+      const data = await cloudRequest("cloud/me", { signal: AbortSignal.timeout(8000) });
       if (sequence === refreshSequence.current) {
         setUser(data.user);
-        if (data.user) rememberAvatar(data.user.id, data.user.avatar);
+        if (data.user) {
+          if (initialCheck.current && !localStorage.getItem(ACCOUNT_KEY) && !localStorage.getItem(STORAGE_KEY)) choose(data.user);
+          else rememberAvatar(data.user.id, data.user.avatar);
+        }
       }
       return data.user;
     } catch {
       if (sequence === refreshSequence.current) setUser(null);
       return null;
     } finally {
-      if (sequence === refreshSequence.current) setLoading(false);
+      if (sequence === refreshSequence.current) { initialCheck.current = false; setLoading(false); }
     }
   }
   function choose(next) {
@@ -99,7 +104,7 @@ export function WorkspaceRoot() {
         <AdminApp key={user?.id || "anonymous"} account={account} />
       </Suspense>
     );
-  if (owner && loading)
+  if (loading)
     return <div className="account-loading">正在检查个人工作区账号…</div>;
   if (owner && user && owner.id !== user.id)
     return (

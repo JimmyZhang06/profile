@@ -64,7 +64,7 @@ export function makeDocument({ job = { company: '', title: '', text: '' }, proje
 }
 export function initialWorkspace() {
   const doc = makeDocument({ job: clone(initialJob), projects: initialProjects.slice(0, 2), profile: { ...initialResume, contact: '杭州 · 本科 · 3 年工作经验' }, example: true });
-  return { schema: 2, activeId: doc.id, library: initialProjects.map(p => ({ ...clone(p), example: true })), profile: clone(blankProfile), documents: [doc], settings: { enabled: true, capabilities: { rewrite: true, match: true }, bindings: { rewrite: 'offline', match: 'offline' }, connections: [] }, ui: { layoutVersion: 1, sidebar: false, chatRatio: DEFAULT_CHAT_RATIO } };
+  return { schema: 2, activeId: doc.id, library: initialProjects.map(p => ({ ...clone(p), example: true })), profile: clone(blankProfile), documents: [doc], settings: { enabled: true, capabilities: { rewrite: true, match: true }, bindings: { rewrite: 'auto', match: 'offline' }, connections: [] }, ui: { layoutVersion: 1, sidebar: false, chatRatio: DEFAULT_CHAT_RATIO } };
 }
 export function validWorkspace(value) {
   const string = v => typeof v === 'string';

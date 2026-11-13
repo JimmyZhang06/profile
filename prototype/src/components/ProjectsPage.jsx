@@ -10,7 +10,7 @@ import { ExperiencePreview } from './ExperiencePreview.jsx';
 import { projectPreview } from '../lib/experiencePreview.js';
 import { useReadingView } from '../hooks/useReadingView.js';
 
-export function ProjectsPage({ library, doc, settings, onBack, onSaveProject, onApply, onArchive, onConfigure, onOpenJob, busy, libraryNavigation, libraryTabsId, hasActiveDocument = true }) {
+export function ProjectsPage({ library, doc, settings, onBack, onSaveProject, onApply, onArchive, onOpenJob, busy, libraryNavigation, libraryTabsId, hasActiveDocument = true }) {
   const [selection, setSelection] = useState(doc.resume.projectIds), [query, setQuery] = useState('');
   const [editing, setEditing] = useState(null), [archived, setArchived] = useState(false), [sort, setSort] = useState(false), [review, setReview] = useState(false), [saved, setSaved] = useState('');
   const [selectionOpen, setSelectionOpen] = useState(() => !window.matchMedia('(max-width: 1000px)').matches);
@@ -75,7 +75,7 @@ export function ProjectsPage({ library, doc, settings, onBack, onSaveProject, on
               { label: '从当前选材移除', icon: <IconX size={16} />, onClick: () => setSelection(old => old.filter(id => id !== project.id)) },
             ]} />
           </li>)}</ol></> : <p className="selection-empty">从素材列表选择与岗位相关的项目。</p>}
-          <details className="selection-method"><summary>{connection ? '模型辅助优化' : '本地整理'}<IconChevronDown size={14} /></summary><p>{connection ? '发送前确认资料范围，生成的建议由你审核后采用。' : '按 JD 关键词提取已有原文。应用选材会保留已修改的表达，生成草稿会重新选取。'}</p>{!connection && onConfigure ? <button onClick={onConfigure}>连接 AI 模型<IconArrowRight size={14} /></button> : null}</details>
+          <details className="selection-method"><summary>{connection ? '如何优化表达' : '如何挑选原文'}<IconChevronDown size={14} /></summary><p>{connection ? '发送前确认资料范围，生成的建议由你审核后采用。' : '按 JD 关键词提取已有原文。应用选材会保留已修改的表达，生成草稿会重新选取。'}</p></details>
         </div>
       </aside>
     </div>

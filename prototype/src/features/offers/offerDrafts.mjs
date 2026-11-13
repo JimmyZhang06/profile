@@ -1,4 +1,6 @@
 import { emptyOffer } from "./offerEngine.mjs";
+import { offerDraftKey } from "./offerStorage.mjs";
+export { offerDraftKey } from "./offerStorage.mjs";
 
 export function privateDraftFromOpportunity(item) {
   if (
@@ -35,7 +37,6 @@ export function draftHasInput(plan, slot = 0) {
     JSON.stringify(emptyOffer(slot === 0 ? "方案 A" : "方案 B"))
   );
 }
-export const offerDraftKey = (owner) => "luli:offers:drafts:v1:" + owner;
 export function readOfferDrafts(storage, owner) {
   try {
     const data = JSON.parse(storage.getItem(offerDraftKey(owner)));

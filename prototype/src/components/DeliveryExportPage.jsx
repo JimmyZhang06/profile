@@ -23,7 +23,6 @@ function DeliveryEvidence({doc, onLocate}) {
   ].filter(Boolean);
   return <section className="delivery-reasoning">
     <h2>{plan.mode === 'model' ? '岗位要求与原文依据' : '本地选材结果'}</h2>
-    {plan.modelLabel && <p className="quiet-note">生成来源 · {plan.modelLabel}</p>}
     {plan.considered && <p className="quiet-note">比较了 {plan.considered.projects} 个项目和 {plan.considered.work + plan.considered.research} 段实习或研究。{included.length ? '当前收录' + included.join('、') + '。' : ''}</p>}
     {doc.revision > 0 && <p className="quiet-note">以下依据记录于生成时，请与当前正文核对。</p>}
     {!!omitted.length && <details><summary>本稿略去的要点 · {omitted.length}</summary>

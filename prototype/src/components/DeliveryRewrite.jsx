@@ -10,13 +10,11 @@ function Difference({label, part}) {
 }
 
 export function DeliveryRewrite({doc, resume, selected, value, settings, onApply}) {
-  const models = settings.connections.filter((c) => c.enabled !== false);
-  const [choice,setChoice] = useState(null), [direction,setDirection] = useState('shorter');
+  const [direction,setDirection] = useState('shorter');
   const [instruction,setInstruction] = useState(''), [proposal,setProposal] = useState(null);
   const [busy,setBusy] = useState(false), [error,setError] = useState('');
   const task = useRef(null);
-  const model = [choice,doc.delivery?.modelId,settings.bindings.rewrite,models[0]?.id]
-    .map((id) => models.find((c) => c.id === id)).find(Boolean);
+  const model = settings.connections.find(c => c.enabled !== false && c.id === settings.bindings.rewrite);
   const enabled = model && settings.enabled && settings.capabilities.rewrite;
   useEffect(() => {
     setProposal(null); setBusy(false); setError('');
@@ -41,14 +39,12 @@ export function DeliveryRewrite({doc, resume, selected, value, settings, onApply
       <div className="delivery-rewrite-pickers">
         <SelectField label="改写方向" value={direction} onChange={setDirection}
           options={Object.entries(rewriteDirections).map(([value,label]) => ({value,label}))} disabled={busy} viewportMenu />
-        {models.length > 1 && <SelectField label="改写模型" value={model.id} onChange={setChoice}
-          options={models.map((c) => ({value:c.id,label:c.name}))} disabled={busy} viewportMenu />}
       </div>
       <label className="delivery-rewrite-instruction">{direction === 'custom' ? '修改要求' : '补充要求（可选）'}
         <textarea rows={2} maxLength={600} value={instruction} disabled={busy}
           placeholder="例如：把我负责的验收工作放在第一句" onChange={(e) => setInstruction(e.target.value)} />
       </label>
-      <p className="quiet-note">将当前段落、岗位 JD 和修改要求发给「{model.name}」。</p>
+      <details className="rewrite-privacy"><summary>查看发送范围</summary><p>本次将当前段落、岗位 JD 和修改要求发给 {model.name}（{model.baseUrl}）。</p></details>
       {busy ? <Button variant="ghost" onClick={() => {task.current?.abort();task.current = null;setBusy(false);}}>停止改写</Button> :
         <Button variant="secondary" disabled={!value.trim() || (direction === 'custom' && !instruction.trim())} onClick={generate}>
           {comparison ? '重新改写' : '生成对照稿'}<IconArrowRight size={15} />
@@ -61,6 +57,6 @@ export function DeliveryRewrite({doc, resume, selected, value, settings, onApply
         <Button onClick={() => {onApply(proposal.after);setProposal(null);}}>采用到纸面</Button>
         <Button variant="ghost" onClick={() => setProposal(null)}>放弃建议</Button>
       </div>}
-    </> : <p className="quiet-note">请先在设置中启用一个对话与改写模型。上方正文可直接编辑。</p>}
+    </> : <p className="quiet-note">当前可直接编辑上方正文。在线写作可用时，可在这里生成对照稿。</p>}
   </details>;
 }

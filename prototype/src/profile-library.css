@@ -129,3 +129,6 @@
 }
 @media (prefers-reduced-motion: reduce) { .profile-record-summary > button > svg { transition: none; } }
 @media print { .resume-record { break-inside: auto; } .resume-record-heading { break-after: avoid; } }
+.settings-advanced { margin-block: 18px; border-top: 1px solid var(--border); }
+.settings-advanced > summary { padding: 16px 0; color: var(--text-secondary); cursor: pointer; }
+.settings-advanced[open] > summary { margin-bottom: 8px; }

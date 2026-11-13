@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { IconArrowDown, IconArrowUpRight, IconCopy, IconPencil, IconRefresh, IconFileText, IconBooks, IconBriefcase2, IconPlug } from '@tabler/icons-react';
+import { IconArrowDown, IconArrowUpRight, IconCopy, IconPencil, IconRefresh, IconFileText, IconBooks, IconBriefcase2 } from '@tabler/icons-react';
 import { Button, IconButton } from './ui/index.jsx';
 import { ChatComposer } from './ChatComposer.jsx';
 import { useConversationScroll } from '../hooks/useConversationScroll.js';
@@ -22,13 +22,12 @@ function Message({ message, doc, onApply, onDismiss, onSource, onLocate, onOpen,
     </> : <MessageContent text={message.text || ''} typing={message.status === 'streaming'} />}
     <RevisionDeck message={message} doc={doc} onApply={onApply} onDismiss={onDismiss} onSource={onSource} onLocate={onLocate} onReview={onReview} />
     {message.recommendations?.length ? <Button variant="secondary" className="recommendation-link" onClick={() => onOpen('projects')}><IconBooks size={16} />查看项目组合</Button> : null}
-    {message.connect ? <Button variant="secondary" onClick={() => onOpen('settings')}><IconPlug size={16} />连接模型</Button> : null}
     {['error', 'stopped'].includes(message.status) ? <div className={'message-notice ' + message.status}><span>{message.error || '已停止生成，未完成的建议不会写入简历。'}</span><button disabled={busy} onClick={() => onRetry(message)}><IconRefresh size={14} />重试</button></div> : null}
     {message.status !== 'streaming' ? <div className="message-actions"><IconButton label="复制回复" onClick={() => onCopy(message.text)}><IconCopy size={16} /></IconButton>{message.prompt ? <IconButton label="重新生成回复" disabled={busy} onClick={() => onRetry(message)}><IconRefresh size={16} /></IconButton> : null}</div> : null}
   </article>;
 }
 
-export function Chat({ doc, settings, selected, busy, focusKey, onSend, onStop, onInput, onRemoveSelection, onOpen, onApply, onDismiss, onSource, onLocate, onCopy, onRetry, onModel, active = true }) {
+export function Chat({ doc, settings, selected, busy, focusKey, onSend, onStop, onInput, onRemoveSelection, onOpen, onApply, onDismiss, onSource, onLocate, onCopy, onRetry, active = true }) {
   const { viewportRef, contentRef, atBottom, onScroll, scrollToLatest, pauseFollowing } = useConversationScroll(doc.id, active);
   const enabled = settings.enabled && settings.capabilities.rewrite;
 
@@ -61,7 +60,7 @@ export function Chat({ doc, settings, selected, busy, focusKey, onSend, onStop, 
       {!atBottom ? <button type="button" className="scroll-latest" aria-label="回到最新消息" onClick={() => scrollToLatest(true)}><IconArrowDown size={15} /><span>回到最新</span></button> : null}
       <ChatComposer doc={doc} settings={settings} selected={selected} busy={busy} active={active}
         focusKey={focusKey} onSend={send} onStop={onStop} onInput={onInput}
-        onRemoveSelection={onRemoveSelection} onOpen={onOpen} onModel={onModel} />
+        onRemoveSelection={onRemoveSelection} onOpen={onOpen} />
     </div>
   </section>;
 }

@@ -6,8 +6,8 @@ import { localDelivery, parseDelivery, readDeliveryResult } from './delivery.js'
 import { deliveryCallPlan, isDeliveryPurpose, restoreDeliveryIds, screeningBatches, shortlistedContext, validateShortlist } from './deliverySelection.js';
 import { deliveryFieldStream } from './deliveryStream.js';
 import { requestsParagraphs, rewriteDirections, rewriteIssue, sameWording } from './revisionText.js';
+import { writingConnectionId } from './writingService.js';
 
-export const modelName = (settings, capability = 'rewrite') => settings.bindings[capability] === 'offline' ? '本地整理' : settings.connections.find(c => c.id === settings.bindings[capability])?.name || '选择模型';
 export async function api(path, payload, signal, ownerId) {
   const response = await fetch('/api/' + (ownerId ? 'cloud/' : '') + path, { method: payload ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'X-Luli-Client': 'workspace', ...(ownerId ? { 'X-Luli-Account': ownerId } : {}) }, ...(payload ? { body: JSON.stringify(payload) } : {}), signal });
   const result = await response.json();
@@ -80,25 +80,25 @@ async function localResult({ prompt, doc, selected, library }) {
     const parts = before.split(/(?<=[。；;！？])\s*/u).map((s) => s.trim()).filter(Boolean);
     const after = /合并|合成一/u.test(prompt) ? before.split('\n').filter(Boolean).join('') : parts.join('\n');
     const proposals = validateSuggestions([{field:selected,after,reason:'按原有完整句子调整要点分段。'}],doc,{paragraphs:true});
-    return {text:proposals.length ? '已按原句调整分段，可以对照后采用。' : '当前段落没有可安全拆分的完整句子。可以点正文自行换行，也可以用已连接的模型改写。',proposals};
+    return {text:proposals.length ? '已按原句调整分段，可以对照后采用。' : '当前段落没有可安全拆分的完整句子。可以点正文，在想分段的位置换行。',proposals};
   }
   if (/检查|完整|缺少|缺口/.test(prompt)) {
     const missing = [['姓名', r.name], ['联系方式', r.contact], ['个人简介', r.summary], ['实习与工作经历', Array.isArray(r.workEntries) ? visibleRecords(r, 'workEntries').map(item => item.description).join('') : r.experience], ['教育背景', Array.isArray(r.educationEntries) ? visibleRecords(r, 'educationEntries').map(item => item.organization).join('') : r.school]].filter(([, v]) => !v?.trim()).map(([label]) => label);
     const quantified = r.projectIds.some(id => getProjectBullets(r, id).some((_, i) => /\d/.test(fieldValue(r, id + ':' + i))));
-    return { text: '已经检查当前简历的基础信息。\n\n' + (missing.length ? '待补充：' + missing.join('、') + '。' : '姓名、联系方式、个人简介、工作经历和教育背景均已填写。') + '\n\n' + (!r.projectIds.length ? '还没有选择项目，可以先从素材库添加相关经历。' : '当前选择了 ' + r.projectIds.length + ' 个项目。' + (!quantified ? '项目中尚未填写量化结果；如有真实数据，可以补充统计口径与结果。' : '已有带数字的描述，请确认数据口径和个人贡献。')) + '\n\n这是本地规则检查，岗位语义分析可在连接模型后进行。', proposals: [] };
+    return { text: '已经检查当前简历的基础信息。\n\n' + (missing.length ? '待补充：' + missing.join('、') + '。' : '姓名、联系方式、个人简介、工作经历和教育背景均已填写。') + '\n\n' + (!r.projectIds.length ? '还没有选择项目，可以先从素材库添加相关经历。' : '当前选择了 ' + r.projectIds.length + ' 个项目。' + (!quantified ? '项目中尚未填写量化结果；如有真实数据，可以补充统计口径与结果。' : '已有带数字的描述，请确认数据口径和个人贡献。')) + '\n\n这次检查依据已填写的内容。', proposals: [] };
   }
   if (/选|匹配|保留.*项目|推荐.*项目/.test(prompt)) {
     const ranking = matchProjects(library, doc.job).slice(0, 3);
-    return { text: '按 JD 和项目文字的关键词，建议先查看这些经历：\n\n' + ranking.map((p, i) => (i + 1) + '. ' + p.project.name + ' — ' + p.project.tags.join('、')).join('\n') + '\n\n可以在“项目素材”中确认组合。这是关键词排序，连接模型后可做更深入的匹配分析。', recommendations: ranking.map(p => p.project.id), proposals: [] };
+    return { text: '按 JD 和项目文字的关键词，建议先查看这些经历：\n\n' + ranking.map((p, i) => (i + 1) + '. ' + p.project.name + ' — ' + p.project.tags.join('、')).join('\n') + '\n\n可以在“项目素材”中确认组合。排序依据是岗位与经历的关键词。', recommendations: ranking.map(p => p.project.id), proposals: [] };
   }
   if (/精简|简短|压缩|简洁/.test(prompt)) {
     const field = selected || 'summary', before = fieldValue(r, field);
     const clauses = before.split(/(?<=[。；])/).filter(Boolean);
     const after = clauses.length > 1 ? clauses.slice(0, Math.max(1, clauses.length - 1)).join('').trim() : before.replace(/能够|持续|相关|具体|的完整过程/g, '').trim();
     const proposals = validateSuggestions([{ field, after, reason: '删除末尾补充句或冗余修饰，原有事实未新增。' }], doc);
-    return { text: proposals.length ? '对“' + fieldLabel(r, field) + '”做了一次保守精简。请确认删去的内容是否仍需要保留。' : '这段文字已经比较精简。可以直接编辑，或连接模型进行更细致的改写。', proposals };
+    return { text: proposals.length ? '对“' + fieldLabel(r, field) + '”做了一次保守精简。请确认删去的内容是否仍需要保留。' : '这段文字已经比较精简。可以点正文直接修改。', proposals };
   }
-  return { text: '你可以选中右侧的一段文字，再告诉我想怎样调整。\n\n本地整理支持精简原文、按关键词选择项目和检查基础信息。自由对话与岗位定向改写需要先连接模型，所有建议都会保留原文供你审核。', proposals: [], connect: true };
+  return { text: '你可以选中右侧的一段文字，再告诉我想怎样调整。\n\n本地整理支持精简原文、按关键词选择项目和检查基础信息。可以先发「检查完整度」，也可以选中一段文字发「精简这段文字」。', proposals: [] };
 }
 const adapters = new Map();
 export function registerAdapter(name, adapter) { adapters.set(name, adapter); }
@@ -177,7 +177,8 @@ registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, sett
 });
 export async function runAssistant(input) {
   if (!input.settings.enabled || !input.settings.capabilities.rewrite) throw new Error('对话辅助已关闭，仍可手工编辑。');
-  const connectionId = input.settings.bindings.rewrite;
+  const binding = input.settings.bindings.rewrite;
+  const connectionId = binding === 'auto' || binding === 'local-only' ? writingConnectionId(input.settings) : binding;
   if (input.signal.aborted) throw new DOMException('已停止', 'AbortError');
   if (connectionId === 'offline') return { ...await localResult(input), offline: true };
   return adapters.get('compatible')({ ...input, connectionId });
@@ -195,13 +196,13 @@ export async function rewriteField(input) {
 }
 export async function runDelivery(input) {
   if (input.signal.aborted) throw new DOMException('已停止', 'AbortError');
-  const connectionId = input.connectionId ?? input.settings.bindings.rewrite;
+  const connectionId = input.connectionId ?? writingConnectionId(input.settings, { tailoring: true });
   if (connectionId === 'offline') return localDelivery(input.prepared);
   if (!input.settings.enabled || !input.settings.capabilities.rewrite) throw new Error('请先在设置中开启 AI 改写，或切换到本地整理。');
   const adapter = adapters.get('compatible');
   const { context } = input.prepared;
   const connection = input.settings.connections.find((c) => c.id === connectionId && c.enabled !== false);
-  if (!connection) throw new Error('当前模型连接不可用，请重新选择。');
+  if (!connection) throw new Error('写作服务暂时不可用，请稍后重试。');
   const batches = screeningBatches(context);
   const strategy = deliveryCallPlan(context,connection.maxOutputTokens,batches.length);
   let calls = 0;
@@ -261,7 +262,7 @@ export async function runDelivery(input) {
 }
 
 function smallLimit(part) {
-  return new Error('模型输出已达到长度上限，连最短的' + part + '也未完整返回。可提高此连接的单次输出上限，或换一个模型重试。');
+  return new Error('本次输出已达到长度上限，最短的' + part + '仍未写完。请减少候选资料后重试。');
 }
 
 export async function enrichDelivery(run, draft, scope, room, signal) {

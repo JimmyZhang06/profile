@@ -293,6 +293,18 @@ export async function publicOfferRules(db) {
   );
   return { ruleset: published?.data || RULESET };
 }
+async function rulesForSave(db, owner, version) {
+  if (version === undefined) return (await publicOfferRules(db)).ruleset;
+  assert(idValid(version), 400, "计算规则版本无效");
+  if (version === RULESET.version) return RULESET;
+  const published = await one(db, "SELECT data FROM offer_rule_versions WHERE id=$1 AND state='published'", [version]);
+  if (published) return published.data;
+  const previous = await one(db,
+    "SELECT snapshot->'ruleset' AS data FROM offer_plans WHERE owner_id=$1 AND snapshot->'ruleset'->>'version'=$2 LIMIT 1",
+    [owner, version]);
+  assert(previous, 409, "此版本的规则暂不可用，请在规则来源中采用当前规则再保存。");
+  return previous.data;
+}
 // Authentication, CSRF/origin and current administrator MFA grant are enforced by app.mjs.
 // Return data for the entry point's JSON responder; no private input is logged or audited.
 export async function offerRoute({
@@ -410,14 +422,26 @@ export async function offerRoute({
   );
   const input = await readBody(req),
     plan = validateOffer(input.plan);
-  const ruleset = (await publicOfferRules(db)).ruleset;
+  if (method === "POST" && input.requestId !== undefined)
+    assert(idValid(input.requestId), 400, "保存记录编号无效");
+  const ruleset = await rulesForSave(db, owner, input.ruleVersion);
   const snapshot = snapshotOffer(plan, ruleset);
   return db.transaction().execute(async (tx) => {
-    const key = method === "POST" ? randomUUID() : id;
+    const key = method === "POST" ? input.requestId ?? randomUUID() : id;
     let row;
     if (method === "POST") {
       // Lock owner to make the per-account capacity check atomic.
       await one(tx, 'SELECT id FROM "user" WHERE id=$1 FOR UPDATE', [owner]);
+      if (input.requestId) {
+        const existing = await one(tx,
+          "SELECT id,revision,data,snapshot,updated_at,data=$3::jsonb AS matches FROM offer_plans WHERE owner_id=$1 AND id=$2",
+          [owner, key, JSON.stringify(plan)]);
+        if (existing) {
+          const { matches, ...item } = existing;
+          assert(matches && (!input.ruleVersion || item.snapshot.ruleset.version === input.ruleVersion), 409, "同一保存记录的内容已变更，请重新保存。");
+          return { item };
+        }
+      }
       const count = await one(
         tx,
         "SELECT COUNT(*) AS count FROM offer_plans WHERE owner_id=$1",

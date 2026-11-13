@@ -143,7 +143,7 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
   async function tryShorter(draft, result) {
     const signal = task.current.signal;
     refit.current = {draft, result, pending:true};
-    setStatus('已测出仍然超页，正请同一模型缩写入选经历。');
+    setStatus('版面仍然超出一页，正在精简入选经历。');
     try {
       const plan = await refitDelivery(run,draft,space,result.overflowMm,signal);
       signal.throwIfAborted();
@@ -225,7 +225,7 @@ export function DeliveryGeneration({run, onCancel, onReady, onError}) {
           onChange={editRepair} onError={setStatus} onTailor={onCancel} />
       </>}
     </aside><section ref={manuscript} className="generation-manuscript" aria-label="正在成稿的简历" aria-live="off">
-      <div className="generation-paper-label"><span>{repair ? '当前文稿' : '写作中的文稿'}</span><span>{local ? '本地整理' : run.modelName}</span></div>
+      <div className="generation-paper-label"><span>{repair ? '当前文稿' : '写作中的文稿'}</span></div>
       {narrow ? <ResumeDocument {...paperProps} readOnly className="generation-paper" /> : <DeliveryPreview {...paperProps} />}
     </section></div>
     <DeliveryPreview hidden resume={candidate?.resume || outline} onMeasure={measure} />

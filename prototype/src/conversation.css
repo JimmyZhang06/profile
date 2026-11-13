@@ -88,7 +88,7 @@
   .composer .model-menu { flex: 1; display: flex; justify-content: flex-end; }
   .composer .model-menu .menu-trigger { max-width: 100%; min-width: 0; font-size: 12px; min-height: 30px; padding: 5px 6px; gap: 4px; color: var(--text-secondary); }
   .composer .model-menu .menu-trigger > svg { width: 12px; flex-shrink: 0; }
-  .composer .send-button { width: 30px; height: 30px; margin-left: 5px; }
+  .composer .send-button { width: 30px; height: 30px; margin-left: auto; }
   .composer .send-button:disabled { background: var(--surface-hover); color: var(--text-disabled); }
   .composer-caption { justify-content: center; gap: 10px; margin-top: 7px; font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
   .composer-caption > span { display: none; }

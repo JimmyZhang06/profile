@@ -1,8 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef } from 'react';
-import { IconArrowUp, IconPlus, IconX, IconSquareFilled, IconFileText, IconBooks, IconBriefcase2, IconSparkles, IconPlug, IconEye } from '@tabler/icons-react';
+import { IconArrowUp, IconPlus, IconX, IconSquareFilled, IconFileText, IconBooks, IconBriefcase2, IconSparkles, IconEye } from '@tabler/icons-react';
 import { IconButton, Menu } from './ui/index.jsx';
 import { fieldLabel, fieldValue } from '../lib/workspace.js';
-import { modelName } from '../lib/assistant.js';
 import { selectionPreview } from '../lib/experiencePreview.js';
 
 function fitInput(input) {
@@ -11,7 +10,7 @@ function fitInput(input) {
   input.style.height = Math.min(144, Math.max(32, input.scrollHeight)) + 'px';
 }
 
-export function ChatComposer({ doc, settings, selected, busy, focusKey, active, onSend, onStop, onInput, onRemoveSelection, onOpen, onModel }) {
+export function ChatComposer({ doc, settings, selected, busy, focusKey, active, onSend, onStop, onInput, onRemoveSelection, onOpen }) {
   const inputRef = useRef(null), hintId = useId();
   const enabled = settings.enabled && settings.capabilities.rewrite;
   const reference = selected ? selectionPreview(doc.resume, selected) : null;
@@ -65,12 +64,6 @@ export function ChatComposer({ doc, settings, selected, busy, focusKey, active, 
           [{ label: '按 JD 生成整份简历', description: '从资料库选材并改写', disabled: busy, onClick: () => onOpen('tailor') },
             ...[selected ? '精简这段文字' : '精简个人简介', '检查完整度'].map(text => ({ label: text, disabled: !enabled || busy, onClick: () => send(text) }))]
         } />
-        <Menu label="选择对话模型" className="model-menu opens-up" value={<span>{enabled ? modelName(settings) : '手工模式'}</span>} items={[
-          { label: '本地整理', description: '精简、选材与完整度检查', selected: settings.bindings.rewrite === 'offline', onClick: () => onModel('offline') },
-          ...settings.connections.filter((c) => c.enabled !== false).map(connection => ({ label: connection.name, description: connection.model, selected: settings.bindings.rewrite === connection.id, onClick: () => onModel(connection.id) })),
-          { separator: true },
-          { label: '管理模型连接', icon: <IconPlug size={16} />, onClick: () => onOpen('settings') },
-        ]} />
         {busy ? <IconButton label="停止生成" className="send-button" onClick={onStop}><IconSquareFilled size={14} /></IconButton> :
           <button className="send-button" aria-label="发送消息" type="submit" disabled={!doc.composer.trim() || !enabled}><IconArrowUp size={19} stroke={2} /></button>}
       </div>

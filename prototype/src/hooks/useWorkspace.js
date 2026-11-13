@@ -33,7 +33,7 @@ export function useWorkspace() {
     function changed(event) { if (event.key === STORAGE_KEY && event.newValue) { external.current = true; setConflict(true); } }
     function flush() { if (!external.current && !loaded.error) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(latest.current)); } catch { /* The visible save indicator reports failures during editing. */ } } }
     window.addEventListener('storage', changed); window.addEventListener('pagehide', flush);
-    return () => { window.removeEventListener('storage', changed); window.removeEventListener('pagehide', flush); };
+    return () => { flush(); window.removeEventListener('storage', changed); window.removeEventListener('pagehide', flush); };
   }, [loaded.error]);
   return { state, setState, saveState, error, conflict };
 }

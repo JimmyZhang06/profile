@@ -1,8 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { IconArrowRight, IconFileText } from "@tabler/icons-react";
+import { lazy, Suspense, useMemo, useState } from "react";
+import { IconArrowRight } from "@tabler/icons-react";
 import { Page, Button, Field } from "./ui/index.jsx";
 import { WorkspaceLink } from "./ui/WorkspaceLink.jsx";
-import { SelectField } from "./ui/SelectField.jsx";
+import { writingConnectionId } from "../lib/writingService.js";
 import { deliveryCallPlan, jobFromListing } from "../lib/deliverySelection.js";
 import { projectDetailFields, projectDetails } from "../lib/projects.js";
 import {
@@ -24,10 +24,10 @@ export function TailorPage({
   defaultAvailability = "",
   onRememberAvailability,
   sessionExpired = false,
+  checkingService = false,
   example = false,
   onBack,
   onReady,
-  onConfigure,
   onLibrary,
   onManual,
   onImport,
@@ -51,16 +51,11 @@ export function TailorPage({
     [projects, example, projectChoices, scopeChoices],
   );
   const [run, setRun] = useState(null), [error, setError] = useState(""), [message, setMessage] = useState("");
-  const models = settings.connections.filter((item) => item.enabled !== false);
-  const [preferred, setPreferred] = useState(savedOptions?.modelId ?? null);
-  const bound = models.find((item) => item.id === settings.bindings.rewrite);
-  const defaultId = bound?.id ?? (models.length === 1 ? models[0].id : models.length ? "" : "offline");
-  const modelId = preferred === "offline" || models.some((item) => item.id === preferred) ? preferred : defaultId;
+  const modelId = writingConnectionId(settings, { tailoring: true });
   const local = modelId === "offline";
   const connection = local
     ? { id: "offline", baseUrl: "http://localhost", name: "本地整理" }
-    : models.find((c) => c.id === modelId);
-  const [approvedScope, setApprovedScope] = useState(null);
+    : settings.connections.find((c) => c.id === modelId);
   const prepared = useMemo(() => {
     if (!connection) return null;
     const approval = {
@@ -90,16 +85,11 @@ export function TailorPage({
     example,
   ]);
   const busy = !!run;
-  const confirmed = !!prepared && approvedScope === prepared;
   const hasExamples = example || chosen.some((p) => p.example);
-  useEffect(() => {
-    setApprovedScope(null);
-  }, [settings.enabled, settings.capabilities.rewrite, sessionExpired]);
   const update = (patch) => setJob((old) => ({ ...old, ...patch }));
   function stop() {
     setRun(null);
     setMessage("已返回选材，本次填写的岗位与资料范围已保留。");
-    setApprovedScope(null);
   }
   function generate() {
     if (busy || !canGenerate) return;
@@ -107,26 +97,25 @@ export function TailorPage({
     setMessage("");
     try {
       const generation = prepareDelivery({ job, profile: withApplicationAvailability(personal, availability), projects: chosen, excludedRecords, approval: prepared.approval, connection, profileExample: example });
-      setRun({settings, connectionId:modelId, modelName:connection.name, prepared:generation,
+      setRun({settings, connectionId:modelId, prepared:generation,
         materialApproval:local ? undefined : prepared.approval});
     } catch (e) {
       setError(e.message);
-      setApprovedScope(null);
     }
   }
   const records = experiences.filter((entry) => !excludedRecords.includes(entry.id)).length;
   const calls = useMemo(() => !local && prepared ? deliveryCallPlan(prepared.context,connection?.maxOutputTokens) : null,
     [local, prepared, connection?.maxOutputTokens]);
-  const options = { projectChoices, excludedRecords, scopeChoices, modelId: preferred, availabilityOverride };
+  const options = { projectChoices, excludedRecords, scopeChoices, availabilityOverride };
   const canGenerate =
     job.title.trim() &&
     job.text.trim().length >= 20 &&
     !!prepared &&
     (chosen.length || records) &&
-    (local || (!sessionExpired && confirmed && settings.enabled && settings.capabilities.rewrite));
+    !checkingService && (local || !sessionExpired);
   if (run) return <Suspense fallback={<Page title="正在打开写作纸面" onBack={stop} dirty />}>
     <DeliveryGeneration run={run} onReady={onReady} onCancel={stop}
-      onError={(text) => {setRun(null); setError(text); setApprovedScope(null);}} />
+      onError={(text) => {setRun(null); setError(text);}} />
   </Suspense>;
   return (
     <Page
@@ -148,7 +137,7 @@ export function TailorPage({
             A4 一页 · 正文 11 pt
           </span>
             <Button disabled={!canGenerate} onClick={generate}>
-              {local ? "生成本地选材草稿" : "生成整份投递草稿"}
+              {checkingService ? "正在准备…" : local ? "用已有原文生成" : "发送所选资料并生成简历"}
               <IconArrowRight size={16} />
             </Button>
         </>
@@ -268,42 +257,16 @@ export function TailorPage({
           </details>
         </section>
         <section className="tailor-destination">
-          <header>
-            <IconFileText size={22} />
-            <div>
-              <strong>
-                {local
-                  ? "本地整理 · 无需发送资料"
-                  : connection
-                    ? connection.name + " · " + connection.model
-                    : "尚未选择模型"}
-              </strong>
-              <p>
-                {local
-                  ? "按关键词选择已有原文，不进行 AI 语义改写。"
-                  : connection?.baseUrl ||
-                    "连接模型后，才能根据 JD 撰写整份简历。"}
-              </p>
-            </div>
-            <Button variant="ghost" onClick={() => onConfigure(job, options)}>
-              模型设置
-            </Button>
-          </header>
-          <SelectField label="本次生成使用的模型" value={modelId} onChange={setPreferred}
-            options={[
-              ...(!modelId ? [{value: "", label: "选择一个模型"}] : []),
-              ...models.map((c) => ({value: c.id, label: c.name, description: c.model})),
-              {value: "offline", label: "本地选材", description: "按关键词挑选原文"},
-            ]} disabled={busy} />
-          {!local && sessionExpired ? <p className="form-error" role="alert">云端登录已过期。请从页面上方重新登录后生成。</p> : null}
-          {!local && (!settings.enabled || !settings.capabilities.rewrite) ? <p className="form-error">请在模型设置中开启 AI 辅助及对话与改写。</p> : null}
+          {!local && sessionExpired ? <p className="form-error" role="alert">请重新登录后生成简历，已选资料会保留。</p> : null}
+          {local && !checkingService && <p>本次将按岗位关键词选取已有原文。</p>}
           {prepared ? (
             <details>
               <summary>
-                {local ? "查看本次使用的资料" : "核对本次发送内容"}
-                <span>JD、候选要点与勾选的详细资料</span>
+                {local ? "查看本次使用的资料" : "查看发送范围与隐私"}
               </summary>
               <div className="tailor-context">
+                {!local && <><h3>本次接收方</h3><p>{connection.name} · {connection.baseUrl}</p>
+                  <p>仅本次生成使用下列资料。姓名和联系方式在设备上排版。{calls && <>分段写作与重试合计最多 {calls.maximum} 次调用。</>}</p></>}
                 <h3>目标岗位</h3>
                 <p>
                   {job.title} {job.company}
@@ -338,21 +301,6 @@ export function TailorPage({
                 ))}
               </div>
             </details>
-          ) : null}
-          {!local && connection && calls ? (
-            <label className="tailor-consent">
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={(e) => setApprovedScope(e.target.checked ? prepared : null)}
-              />
-              <span>
-                我同意将所选资料发送给「{connection.name}」。{calls.bySection
-                  ? '将按经历分段成稿，按入选数量预计不超过 ' + calls.usual + ' 次调用。'
-                  : '预计 ' + calls.usual + ' 次调用，整篇回复过长时会自动分段。'}
-                纸面有余量时可再调用一次，用入选资料补写亮点。含重试与超页精简，最多 {calls.maximum} 次。姓名与联系方式在本机排版。
-              </span>
-            </label>
           ) : null}
         </section>
       </fieldset>

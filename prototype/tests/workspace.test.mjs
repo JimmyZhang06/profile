@@ -1,3 +1,4 @@
+import { writingConnectionId } from '../src/lib/writingService.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -179,4 +180,19 @@ test('unfinished remote stream cannot be treated as a completed suggestion', asy
   globalThis.fetch = async () => new Response('data: {"choices":[{"delta":{"content":"部分文字"}}]}\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
   const state = initialWorkspace();
   await assert.rejects(runAssistant({ doc: state.documents[0], library: state.library, settings: { ...state.settings, bindings: { rewrite: 'test' } }, prompt: '检查', signal: new AbortController().signal, onText: () => {} }), /连接中断/);
+});
+
+test('automatic writing uses a platform connection and preserves scoped service and device-only choices', () => {
+  const settings = initialWorkspace().settings;
+  const personal = { id: 'personal', source: 'user' }, platform = { id: 'platform:1', source: 'platform' };
+  settings.connections = [personal, { ...platform, id:'platform:0', enabled:false }, platform, { ...platform, id:'platform:2' }];
+  assert.equal(writingConnectionId(settings), platform.id);
+  assert.equal(writingConnectionId(settings, { preferredId:'removed' }), 'offline');
+  settings.bindings.rewrite = personal.id;
+  assert.equal(writingConnectionId(settings), personal.id);
+  settings.bindings.rewrite = 'offline';
+  assert.equal(writingConnectionId(settings), 'offline');
+  assert.equal(writingConnectionId(settings, { tailoring:true }), platform.id);
+  settings.bindings.rewrite = 'local-only';
+  assert.equal(writingConnectionId(settings, { preferredId:platform.id }), 'offline');
 });

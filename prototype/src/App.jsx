@@ -18,6 +18,7 @@ import { useTheme } from './hooks/useTheme.js';
 import { useMediaQuery } from './hooks/useMediaQuery.js';
 import { PageNavigationContext, usePageNavigation } from './hooks/usePageNavigation.js';
 import { acceptedProposal, assistantFieldIds, clone, downloadFile, editManuscript, fieldLabel, fieldValue, makeDocument, mutateResume, proposalState, uid, undoDocument, validWorkspace } from './lib/workspace.js';
+import { writingConnectionId } from './lib/writingService.js';
 import { runAssistant } from './lib/assistant.js';
 import { createTypewriter } from './lib/typewriter.js';
 import { moveProjectPoint, prepareProjectSelection } from './lib/projects.js';
@@ -51,6 +52,7 @@ export function App({ workspace, account }) {
   const isMobile = useMediaQuery('(max-width: 760px)');
   const { state, setState, saveState, error, conflict } = workspace;
   const [catalog, setCatalog] = useState(null);
+  const [services, setServices] = useState(null);
   const [importFrom,setImportFrom] = useState('tailor');
   const [tailorFileId,setTailorFileId] = useState(null);
   const [emptyDoc] = useState(() => ({...makeDocument(), title: '尚未创建简历'}));
@@ -80,7 +82,8 @@ export function App({ workspace, account }) {
   const [designOpen, setDesignOpen] = useState(false);
   const [mobileDesignPreview, setMobileDesignPreview] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(!workspace.cloud && !!account.user);
+  useEffect(() => { if (!workspace.cloud && account.user) setAccountOpen(true); }, [workspace.cloud, account.user?.id]);
   const accountOrigin = useRef(null), accountCloseRequest = useRef(null);
   const registerAccountClose = useCallback(handler => { accountCloseRequest.current = handler; return () => { accountCloseRequest.current = null; }; }, []);
   const closeAccount = useCallback((restore = true) => {
@@ -97,10 +100,11 @@ export function App({ workspace, account }) {
   const navigationTrigger = useRef(null), navigationWasOpen = useRef(false);
   const task = useRef(null), timer = useRef(null), workArea = useRef(null), latest = useRef(state);
   latest.current = state;
-  const enabled = state.settings.enabled && state.settings.capabilities.rewrite;
+  const settings = workspace.cloud && services !== null ? { ...state.settings, connections: services } : state.settings;
+  const enabled = settings.enabled && settings.capabilities.rewrite;
   const preferredChat = doc.chatConnectionId ?? (doc.delivery?.mode === 'local' ? 'offline' : doc.delivery?.modelId);
-  const chatSettings = preferredChat ? {...state.settings, bindings:{...state.settings.bindings,
-    rewrite: state.settings.connections.some((c) => c.id === preferredChat && c.enabled !== false) ? preferredChat : 'offline'}} : state.settings;
+  const chatSettings = { ...settings, bindings: { ...settings.bindings,
+    rewrite: writingConnectionId(settings, { preferredId: preferredChat }) } };
   const updateDoc = (id, change) => setState(s => ({ ...s, documents: s.documents.map(d => d.id === id && !d.archived ? change(d) : d) }));
   const changeDoc = change => updateDoc(doc.id, change);
   function notify(message) { clearTimeout(timer.current); setToast(message); timer.current = setTimeout(() => setToast(''), 4200); }
@@ -176,13 +180,14 @@ export function App({ workspace, account }) {
   useEffect(() => {
     if (!workspace.cloud || !workspace.ready) return;
     let cancelled = false;
-    Promise.all([cloudRequest('cloud/connections', { ownerId: account.owner.id }), cloudRequest('cloud/templates', { ownerId: account.owner.id })]).then(([models, templates]) => {
-      if (cancelled) return;
-      setCatalog(templates.items);
-      setState(s => JSON.stringify(s.settings.connections) === JSON.stringify(models.connections) ? s : ({ ...s, settings: { ...s.settings, connections: models.connections } }));
-    }).catch(() => { /* Existing drafts and local rules remain usable while offline. */ });
+    const options = { ownerId: account.owner.id };
+    cloudRequest('cloud/connections', options).then(({ connections }) => {
+      if (!cancelled) setServices(connections);
+    }).catch(() => { if (!cancelled) setServices(current => current ?? latest.current.settings.connections); });
+    cloudRequest('cloud/templates', options).then(({ items }) => { if (!cancelled) setCatalog(items); })
+      .catch(() => { /* Built-in templates remain available. */ });
     return () => { cancelled = true; };
-  }, [workspace.cloud, workspace.ready, page === 'settings', account.owner?.id]);
+  }, [workspace.cloud, workspace.ready, page === 'settings', account.owner?.id, account.user?.id]);
   useEffect(() => {
     const broken = state.documents.some(d => d.messages.some(m => m.status === 'streaming'));
     if (broken && !task.current) setState(s => ({ ...s, documents: s.documents.map(d => ({ ...d, messages: d.messages.map(m => m.status === 'streaming' ? { ...m, status: 'stopped', proposals: [] } : m) })) }));
@@ -306,15 +311,11 @@ export function App({ workspace, account }) {
     changeDoc(prepare);
     setSelected(null); finish(null); setMobileView('chat');
     if (options.optimize) send('请根据当前 JD 和本次确认的项目资料，优化已选项目的简历表达。突出岗位相关的个人职责、行动和真实结果，说明依据；只提出建议，供我逐项审核。', null, prepared, options.materialApproval);
-    else notify(options.regenerate ? '已按岗位关键词提取原文，可继续编辑或连接 AI 改写' : '项目资料已同步，已编辑的表达保留');
+    else notify(options.regenerate ? '已按岗位关键词提取原文，可以继续编辑' : '项目资料已同步，已编辑的表达保留');
   }
   function retryMessage(message) {
-    if (message.materialOptimization) { open('projects'); notify('这条回复使用了详细素材，请重新确认模型和本次发送范围'); }
+    if (message.materialOptimization) { open('projects'); notify('这条回复使用了详细素材，请重新确认本次发送范围'); }
     else send(message.prompt, message);
-  }
-  function changeModel(id) {
-    stop(); setState(s => ({...s,documents:doc.delivery ? s.documents.map((d) => d.id === doc.id ? {...d,chatConnectionId:id} : d) : s.documents,
-      settings:{...s.settings,enabled:true,capabilities:{...s.settings.capabilities,rewrite:true},bindings:doc.delivery ? s.settings.bindings : {...s.settings.bindings,rewrite:id}}}));
   }
   function importBackup(backup) {
     if (!validWorkspace(backup)) throw new Error('不是可识别的履历备份文件');
@@ -371,27 +372,32 @@ export function App({ workspace, account }) {
       <div className="editor-workspace" hidden={!!page || !currentDoc} inert={conflict || undefined}>
       <WorkspaceHeader doc={doc} saveState={saveState} edit={edit} isMobile={isMobile} mobileView={mobileView} onMobileView={view => { if (guard()) { setDesignOpen(false); setMobileView(view); } }} onNavigation={openNavigation} onOpen={open} onUndo={() => changeDoc(d => undoDocument(d))} onRedo={() => changeDoc(d => undoDocument(d, true))} designOpen={designOpen} onDesignToggle={toggleDesign} />
       <SplitWorkspace ratio={state.ui.chatRatio} onRatioChange={chatRatio => setState(s => ({ ...s, ui: { ...s.ui, chatRatio } }))} mobileDesignPreview={mobileDesignPreview} inert={conflict || undefined} tools={designOpen ? <ResumeDesignPanel catalog={catalog} resume={doc.resume} disabled={!!edit} onChange={changeDesign} onClose={closeDesign} /> : null}>
-        <Chat active={!page && !!currentDoc && !designOpen} doc={doc} settings={chatSettings} selected={selected} busy={busyId === doc.id} focusKey={focusKey} onSend={send} onStop={stop} onInput={text => changeDoc(d => ({ ...d, composer: text }))} onRemoveSelection={() => selectField(null)} onOpen={open} onApply={apply} onDismiss={(id, proposalId) => changeDoc(d => ({ ...d, messages: d.messages.map(m => m.id === id ? { ...m, dismissed: [...(m.dismissed || []), proposalId] } : m) }))} onSource={field => { if (guard()) { setSelected(field); finish('source'); } }} onLocate={locate} onCopy={copy} onRetry={retryMessage} onModel={changeModel} />
+        <Chat active={!page && !!currentDoc && !designOpen} doc={doc} settings={chatSettings} selected={selected} busy={busyId === doc.id} focusKey={focusKey} onSend={send} onStop={stop} onInput={text => changeDoc(d => ({ ...d, composer: text }))} onRemoveSelection={() => selectField(null)} onOpen={open} onApply={apply} onDismiss={(id, proposalId) => changeDoc(d => ({ ...d, messages: d.messages.map(m => m.id === id ? { ...m, dismissed: [...(m.dismissed || []), proposalId] } : m) }))} onSource={field => { if (guard()) { setSelected(field); finish('source'); } }} onLocate={locate} onCopy={copy} onRetry={retryMessage} />
         <Canvas key={doc.id} active={!page && !!currentDoc} doc={doc} selected={selected} edit={edit} onSelect={selectField} onEdit={startEdit} onMovePoint={direction => { if (guard()) changeDoc(d => mutateResume(d,moveProjectPoint(d.resume,selected,direction),'调整项目要点顺序')); }} onEditChange={updateEdit} onSaveEdit={() => setEdit(null)} onCancelEdit={cancelEdit} onAsk={field => { setEdit(null); setSelected(field); setDesignOpen(false); setFocus(false); setMobileView('chat'); setFocusKey(k => k + 1); }} onSource={field => { setSelected(field); open('source'); }} onOpen={open} focus={focus} onFocus={() => setFocus(!focus)} enabled={enabled} designOpen={designOpen} />
       </SplitWorkspace>
       {designOpen && !edit ? <footer className="mobile-design-actions"><Button variant="secondary" onClick={() => setMobileDesignPreview(value => !value)}>{mobileDesignPreview ? <IconArrowLeft size={17} /> : <IconEye size={17} />}{mobileDesignPreview ? '返回设置' : '预览效果'}</Button><Button onClick={closeDesign}><IconCheck size={17} />完成排版</Button></footer> : null}
       </div>
       <div className="workspace-page-host" hidden={!page} inert={conflict || undefined}>
-    {CareerView ? <Suspense fallback={<Page title={careerPages[page]} onBack={() => navigate(null)}><p role="status">正在读取…</p></Page>}><CareerView key={page === 'opportunities' ? (account.user?.id || 'guest') : page} account={account} route={route} onBack={() => navigate(null)}
+    {CareerView ? <Suspense fallback={<Page title={careerPages[page]} onBack={() => navigate(null)}><p role="status">正在读取…</p></Page>}><CareerView key={page === 'opportunities' ? (account.user?.id || 'guest') : page} account={account} route={route} onAccount={() => open('account')} onBack={() => navigate(null)}
       {...(page === 'opportunities' && {onNewResume:()=>open('new'),findResume:id=>resumesForOpportunity(state.documents,id)[0],onResume:id=>withAccountClosed(()=>selectDocument(id))})} /></Suspense> : null}
-    {page === 'opportunity-start' ? <Page title="用岗位制作简历" onBack={()=>opportunityRef ? openLink('/opportunities/'+opportunityRef.id) : navigate(null)} backLabel="返回岗位"><div className="op-resume-source">本次岗位只提供 JD。请继续确认自己的材料与模型授权。</div>{opportunityError?<p className="form-error" role="alert">{opportunityError}</p>:null}{opportunity?<><h2>{opportunity.title}</h2><p>{opportunity.company} · 公开版本 {opportunity.version} · {opportunity.status==='open'?'在招':'已暂停或截止'}</p>{opportunity.version!==opportunityRef.version?<p className="op-notice">你打开的版本为 V{opportunityRef.version}，当前为 V{opportunity.version}。请核对下面的现行 JD 后继续。</p>:null}<div className="op-prose">{opportunity.jd||'当前岗位不再提供可导入的 JD。'}</div>{opportunity.status==='open'?<div className="op-actions"><Button onClick={startOpportunity}>确认 JD，另建一份投递简历</Button></div>:null}{resumesForOpportunity(state.documents,opportunity.id).map(d=><div className="op-notice" key={d.id}><strong>{d.title}</strong><p>已使用 V{d.opportunitySource.version}{d.opportunitySource.version!==opportunity.version?' · 岗位有更新，原稿仍保留':''}</p><Button variant="secondary" onClick={()=>selectDocument(d.id)}>继续打磨这份简历</Button></div>)}<WorkspaceLink href={'/opportunities/'+opportunity.id}>返回岗位详情与当前投递渠道</WorkspaceLink></>:!opportunityError?<p>正在核对岗位当前状态…</p>:null}</Page>:null}
+    {page === 'opportunity-start' ? <Page title="用岗位制作简历" onBack={()=>opportunityRef ? openLink('/opportunities/'+opportunityRef.id) : navigate(null)} backLabel="返回岗位"><div className="op-resume-source">本次岗位提供 JD。下一步选择要用于写作的个人资料。</div>{opportunityError?<p className="form-error" role="alert">{opportunityError}</p>:null}{opportunity?<><h2>{opportunity.title}</h2><p>{opportunity.company} · 公开版本 {opportunity.version} · {opportunity.status==='open'?'在招':'已暂停或截止'}</p>{opportunity.version!==opportunityRef.version?<p className="op-notice">你打开的版本为 V{opportunityRef.version}，当前为 V{opportunity.version}。请核对下面的现行 JD 后继续。</p>:null}<div className="op-prose">{opportunity.jd||'当前岗位不再提供可导入的 JD。'}</div>{opportunity.status==='open'?<div className="op-actions"><Button onClick={startOpportunity}>确认 JD，另建一份投递简历</Button></div>:null}{resumesForOpportunity(state.documents,opportunity.id).map(d=><div className="op-notice" key={d.id}><strong>{d.title}</strong><p>已使用 V{d.opportunitySource.version}{d.opportunitySource.version!==opportunity.version?' · 岗位有更新，原稿仍保留':''}</p><Button variant="secondary" onClick={()=>selectDocument(d.id)}>继续打磨这份简历</Button></div>)}<WorkspaceLink href={'/opportunities/'+opportunity.id}>返回岗位详情与当前投递渠道</WorkspaceLink></>:!opportunityError?<p>正在核对岗位当前状态…</p>:null}</Page>:null}
     {page === 'file-import' ? <Suspense fallback={<Page title="正在打开文件导入" onBack={() => navigate(importFrom)} />}><ResumeImportPage archiveDefault={importFrom === 'library'} destination={workspace.cloud ? '云工作区 · '+account.owner.email : '本机工作区'} onBack={() => navigate(importFrom)} onImport={saveFileImport}/></Suspense> : null}
     {page === 'delete' && currentDoc ? <DeleteDocumentPage doc={doc} onBack={() => navigate(null)} onConfirm={trashCurrentDocument} /> : null}
     {page === 'trash' ? <DocumentTrashPage documents={state.documents} onBack={() => navigate(null)} onRestore={restoreDeletedDocument} onEmpty={confirmed => { if (guard()) setState(s => emptyDocumentTrash(s, confirmed)); }} /> : null}
-    {['library', 'profile', 'projects'].includes(page) ? <LibraryPage onImport={() => request(() => { setImportFrom('library'); finish('file-import'); })} hasActiveDocument={!!currentDoc} key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{hasActiveDocument: !!currentDoc, busy: !!busyId, settings: chatSettings, onOpenJob: () => open('job'), onConfigure: () => open('settings'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}
+    {['library', 'profile', 'projects'].includes(page) ? <LibraryPage onImport={() => request(() => { setImportFrom('library'); finish('file-import'); })} hasActiveDocument={!!currentDoc} key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{hasActiveDocument: !!currentDoc, busy: !!busyId, settings: chatSettings, onOpenJob: () => open('job'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}
     {page === 'job' ? <JobPage opportunitySource={doc.opportunitySource} onTailor={job => { setOpportunitySource(doc.opportunitySource || null); setTailorFileId(doc.origin === 'file' ? doc.id : null); setTailorOptions(null); setTailorJob(job); stop(); finish('tailor'); }} job={doc.job} onBack={() => navigate(null)} onSave={(job, next = null) => { stop(); changeDoc(d => ({ ...d, job, title: d.title === d.job.title + ' · 定向简历' ? job.title + ' · 定向简历' : d.title, resume: { ...d.resume, target: d.resume.target === d.job.title ? job.title : d.resume.target }, updatedAt: Date.now() })); finish(next); notify('目标岗位已更新'); }} /> : null}
     {page === 'new' ? <NewDocumentPage initialJob={tailorJob} onTailor={job => { setTailorOptions(null); setTailorJob(job); finish('tailor'); }} profile={state.profile} library={state.library} onBack={() => navigate('tailor')} onCreate={(job, projects, personalProfile) => { stop(); const next = {...makeDocument({ job, projects, profile: personalProfile || state.profile, template:'application' }), ...(opportunitySource ? {opportunitySource:clone(opportunitySource)} : {})}; setOpportunitySource(null); setState(s => ({ ...s, documents: [...s.documents, next], activeId: next.id })); finish(null); setSelected(null); setFocus(false); setMobileView('chat'); notify('新简历已创建'); }} /> : null}
-    {page === 'settings' ? <SettingsPage theme={theme} modelServiceAvailable={account?.health?.cloudEnabled !== false && (account?.health?.mode !== 'production' || workspace.cloud)} cloudAccount={workspace.cloud ? account.owner.id : null} state={state} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSave={settings => { stop(); setState(s => ({ ...s, settings })); finish(tailorOptions ? 'tailor' : null); notify('设置已保存'); }} notify={notify} onImport={importBackup} /> : null}
+    {page === 'settings' ? <SettingsPage theme={theme} modelServiceAvailable={workspace.cloud ? !!account.user : account.health?.cloudEnabled !== false && account.health?.mode === 'development'} cloudAccount={workspace.cloud ? account.owner.id : null} state={{ ...state, settings }} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSave={next => {
+      stop();
+      if (workspace.cloud) setServices(next.connections);
+      setState(s => ({ ...s, settings: workspace.cloud ? { ...next, connections: [] } : next }));
+      finish(tailorOptions ? 'tailor' : null); notify('设置已保存');
+    }} notify={notify} onImport={importBackup} /> : null}
     {page === 'versions' ? <VersionsPage doc={doc} onBack={() => navigate(null)} onSave={saveVersion} onRestore={version => { stop(); changeDoc(d => ({ ...mutateResume(d, clone(version.resume), '恢复版本'), job: clone(version.job || d.job), versions: [...d.versions, { id: uid(), name: '恢复前自动保存', time: Date.now(), resume: clone(d.resume), job: clone(d.job) }] })); finish(null); setSelected(null); notify('已恢复版本，原草稿已另存'); }} /> : null}
     {page === 'review' ? <ReviewPage doc={doc} onBack={() => navigate(null)} onApply={apply} onLocate={locate} /> : null}
     {page === 'source' ? <SourcePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}
     {page === 'experience' ? <SelectedExperiencePage doc={doc} selected={selected} onBack={() => navigate(null)} /> : null}
-    {page === 'tailor' ? <TailorPage opportunitySource={opportunitySource} example={sampleProfile} key={(account.owner?.id || 'local') + ':' + tailorInstance} job={tailorJob || currentDoc?.job} fromFile={useFileMaterials} profile={useFileMaterials ? doc.resume : hasProfile || (doc.example && !sampleProfile) ? state.profile : doc.resume} library={candidateLibrary} settings={{ ...state.settings, ...(workspace.cloud ? { cloudAccount: account.owner.id } : {}) }} onBack={() => navigate(tailorReturn)} onManual={(job, options) => visitFromTailor('new', job, options)} onImport={(job,options) => {setImportFrom('tailor'); visitFromTailor('file-import',job,options);}} savedOptions={tailorOptions} defaultAvailability={reviewValue(state.profile, '@availability')} onRememberAvailability={hasProfile || !profileHasContent(doc.resume) ? rememberAvailability : undefined} sessionExpired={workspace.cloud && (saveState === 'expired' || !account.user)} onConfigure={(job, options) => visitFromTailor('settings', job, options)} onLibrary={(job, options) => visitFromTailor('library', job, options)} onReady={finishDelivery} /> : null}
+    {page === 'tailor' ? <TailorPage opportunitySource={opportunitySource} example={sampleProfile} key={(account.owner?.id || 'local') + ':' + tailorInstance} job={tailorJob || currentDoc?.job} fromFile={useFileMaterials} profile={useFileMaterials ? doc.resume : hasProfile || (doc.example && !sampleProfile) ? state.profile : doc.resume} library={candidateLibrary} settings={{ ...settings, ...(workspace.cloud ? { cloudAccount: account.owner.id } : {}) }} onBack={() => navigate(tailorReturn)} onManual={(job, options) => visitFromTailor('new', job, options)} onImport={(job,options) => {setImportFrom('tailor'); visitFromTailor('file-import',job,options);}} savedOptions={tailorOptions} defaultAvailability={reviewValue(state.profile, '@availability')} onRememberAvailability={hasProfile || !profileHasContent(doc.resume) ? rememberAvailability : undefined} sessionExpired={workspace.cloud && (saveState === 'expired' || !account.user)} checkingService={workspace.cloud && !!account.user && services === null && !['offline','expired','error'].includes(saveState)} onLibrary={(job, options) => visitFromTailor('library', job, options)} onReady={finishDelivery} /> : null}
     {page === 'export' ? <Suspense fallback={<Page title="正在打开一页校稿" onBack={() => navigate(null)} />}><DeliveryExportPage key={doc.id} doc={doc} settings={{...chatSettings, ...(workspace.cloud ? {cloudAccount:account.owner.id} : {})}} onSave={saveReviewedResume} onUndo={() => changeDoc(d => undoDocument(d))} onBack={() => navigate(null)} onTailor={() => open('tailor')} notify={notify} /></Suspense> : null}
     {page === 'rename' ? <RenamePage key={doc.id} doc={doc} onBack={() => navigate(null)} onSave={title => { changeDoc(d => ({ ...d, title })); finish(null); }} /> : null}
       </div>

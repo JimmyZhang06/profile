@@ -50,7 +50,7 @@ export function emptyCloudWorkspace() {
     settings: {
       enabled: true,
       capabilities: { rewrite: true, match: true },
-      bindings: { rewrite: "offline", match: "offline" },
+      bindings: { rewrite: "auto", match: "offline" },
       connections: [],
     },
     ui: { layoutVersion: 1, sidebar: false, chatRatio: DEFAULT_CHAT_RATIO },

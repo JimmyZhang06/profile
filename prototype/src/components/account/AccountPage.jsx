@@ -13,6 +13,7 @@ import { AccountPanel } from './AccountPanel.jsx';
 import { AvatarEditor } from './AvatarEditor.jsx';
 import { BrandLogo } from "../BrandLogo.jsx";
 import { cloudRequest } from "../../lib/cloudClient.js";
+import { clearOfferDeviceData } from "../../features/offers/offerStorage.mjs";
 import {
   selectImport,
   cloudCacheKey,
@@ -60,7 +61,7 @@ export function EmailLogin({
         </p>
         <p className="account-footnote">
           <IconDeviceDesktop size={16} />
-          在「AI 与设置 → 本机数据」中可导出完整备份，换设备后再导入。
+          在「设置 → 数据与备份」中可导出资料，换设备后再导入。
         </p>
         {health?.cloudEnabled ? <a href="/admin">管理员登录</a> : null}
       </div>
@@ -401,7 +402,11 @@ export function AccountPage({ account, workspace, onBack, registerClose, onWorks
     if (avatarDirty) { pendingClose.current = next; setLeavePrompt(true); }
     else next();
   }
-  useEffect(() => registerClose(requestClose), [avatarBusy, avatarDirty, onBack, registerClose]);
+  function closePanel(next) {
+    if (user && !own) changeWorkspace(() => account.choose(user));
+    else requestClose(next);
+  }
+  useEffect(() => registerClose(closePanel), [avatarBusy, avatarDirty, onBack, registerClose, user?.id, own]);
   useEffect(() => { if (!avatarDirty) { setLeavePrompt(false); pendingClose.current = null; } }, [avatarDirty]);
   useEffect(() => { if (leavePrompt) continueEditing.current?.focus({ preventScroll: true }); }, [leavePrompt]);
   function changeWorkspace(fn) { requestClose(() => onWorkspaceChange(fn)); }
@@ -456,7 +461,7 @@ export function AccountPage({ account, workspace, onBack, registerClose, onWorks
   return (
     <AccountPanel
       title={user ? "账号与安全" : "登录账号"}
-      onClose={() => requestClose()}
+      onClose={() => closePanel()}
       closeDisabled={avatarBusy}
       notice={leavePrompt ? <div className="account-panel-leave" role="alert"><p>头像调整还没有保存。</p><div><Button ref={continueEditing} variant="secondary" onClick={() => { pendingClose.current = null; setLeavePrompt(false); requestAnimationFrame(() => document.querySelector('.avatar-crop')?.focus()); }}>继续调整</Button><Button variant="ghost" onClick={() => { const next = pendingClose.current; pendingClose.current = null; setLeavePrompt(false); next?.(); }}>放弃调整并离开</Button></div></div> : null}
     >
@@ -527,10 +532,6 @@ export function AccountPage({ account, workspace, onBack, registerClose, onWorks
             <div className="account-actions">
               <Button variant="secondary" onClick={() => requestClose(() => setMigrating(true))}>
                 从本机导入资料
-              </Button>
-              <Button variant="ghost" onClick={() => changeWorkspace(() => account.choose(null))}>
-                <IconDeviceDesktop size={16} />
-                切换到本机工作区
               </Button>
               {user.role === "admin" ? (
                 <a className="account-text-link" href="/admin">
@@ -722,7 +723,9 @@ export function AccountPage({ account, workspace, onBack, registerClose, onWorks
                                 method: "POST", ownerId: user.id,
                                 body: { email: deleteEmail, otp: deleteOtp },
                               });
-                              workspace.forget?.(); account.choose(null); await account.refresh();
+                              workspace.forget?.();
+                              clearOfferDeviceData(localStorage, user.id);
+                              account.choose(null); await account.refresh();
                             });
                           }
                         })

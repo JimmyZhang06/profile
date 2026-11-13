@@ -24,7 +24,7 @@ A user should be able to complete each application inside the site. New Resume o
 
 Measure the actual header and education identities before the writer starts. Use spare printed lines for distinct, source-backed actions, deliverables and outcomes. Group the most relevant experiences into readable points. Keep evidentiary caveats in review. Reveal verified wording progressively on the paper for every generation path, including fast responses and reduced motion. Omit the skip control, keep cancellation and disable scrolling/cursor effects for reduced motion. Hand the fitted draft directly to the conversation and editable manuscript. Manual edits and adopted AI changes update the same version the user will export. Keep source material intact and remeasure the current wording.
 
-When a model hits its output limit, support bounded, sequential lookups of the approved experiences. Prefer section writing up front for small output budgets, reuse completed screening, and resolve short evidence references against the original material. Show the maximum calls before consent, respect stop and quota errors, and require a complete evidence-checked draft before saving.
+When a model hits its output limit, support bounded, sequential lookups of the approved experiences. Prefer section writing up front for small output budgets, reuse completed screening, and resolve short evidence references against the original material. Keep the maximum calls in an optional pre-send privacy disclosure, respect stop and quota errors, and require a complete evidence-checked draft before saving.
 
 ## JD to application-ready resume (2026-11-02)
 
@@ -213,6 +213,10 @@ Mobile tables group the primary identity/title, parallel metadata and an explici
 The user clarifies that further simplification means each record becomes one compact list item, not merging the top navigation and page heading. On phones use flat, divided template/user/invitation lists, with name, concise status/version metadata and a trailing action in the same item. Template and user rows are full-width buttons opening their detail; invitation revocation remains a separate explicit button. Preserve full names/emails, allow metadata to wrap on narrow screens, retain desktop tables and keep the accepted header unchanged.
 
 Mobile audit records default to collapsed summaries showing the operation and timestamp. Expand each record independently to read its complete actor, target, reason and before/after values. Translate the recorded maintenance-import action for readability without modifying stored records. Keep AI service tab labels centered in both list and editor views, including their draft indicators. Mark model configuration as technical, non-contact fields with appropriate autocomplete/input hints, preserving normal Chinese composition and login autofill. iOS owns the keyboard accessory/AutoFill bar; do not claim HTML hints force it hidden, use fake OTP fields, disable input, or change device settings during verification.
+
+## Writing and saving in the personal workspace
+
+Keep platform routing and credentials in the admin console. Show optional personal services only under advanced writing preferences. The generate button explicitly sends the selected materials for this operation. Keep its recipient, scope and request limit available in a collapsed disclosure. Use one account-based save action for private records. Guest drafts, interrupted writes and older device backups remain recoverable, with explicit confirmation before bringing guest data into an account.
 
 ## Managed model service configuration (2026-11-02)
 

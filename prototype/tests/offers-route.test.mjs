@@ -55,7 +55,11 @@ test("private offer persistence is owner-bound, versioned and independent from r
   plan.start = "2026-01-01";
   plan.livingBudget = { city: "shenzhen", wallets: { CN: { net: 8000, goal: 1500 } },
     places: { shenzhen: { shared: 1600, daily: 2100, fixed: 100 } } };
-  const { item } = await route(a, "/api/cloud/offers", "POST", { plan });
+  const requestId = "fictional-save";
+  const { item } = await route(a, "/api/cloud/offers", "POST", { plan, requestId });
+  assert.deepEqual((await route(a, "/api/cloud/offers", "POST", { plan, requestId })).item, item);
+  assert.equal((await route(a, "/api/cloud/offers")).items.length, 1);
+  await assert.rejects(() => route(a, "/api/cloud/offers", "POST", { plan: { ...plan, name: "另一份" }, requestId }), e => e.status === 409);
   assert.equal(item.revision, 1);
   assert.equal(item.snapshot.algorithm, "offers-1.0.0");
   assert.deepEqual((await route(a, "/api/cloud/offers/" + item.id)).item.data.livingBudget, plan.livingBudget);
@@ -150,6 +154,10 @@ test("private offer persistence is owner-bound, versioned and independent from r
   );
   const audit = await one(db, "SELECT COUNT(*) AS count FROM audit_events");
   assert.equal(+audit.count, 2);
+  const fromOldDevice = await route(b, "/api/cloud/offers", "POST", { plan, requestId, ruleVersion: RULESET.version });
+  assert.equal(fromOldDevice.item.snapshot.ruleset.version, RULESET.version);
+  await assert.rejects(() => route(b, "/api/cloud/offers", "POST", { plan, requestId, ruleVersion: ruleset.version }), e => e.status === 409);
+  await assert.rejects(() => route(b, "/api/cloud/offers", "POST", { plan, ruleVersion: "unknown-unpublished" }), e => e.status === 409);
   await route(a, "/api/cloud/offers/" + item.id + "?revision=2", "DELETE");
   assert.equal((await route(a, "/api/cloud/offers")).items.length, 0);
 });

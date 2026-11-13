@@ -680,11 +680,12 @@ test("account, workspace and administration enforce real session and ownership b
         ),
       );
       assert.deepEqual(requests.map((r) => r.status).sort(), [200, 429]);
-      assert.ok(
-        (await alice.request("cloud/connections")).data.connections.some(
-          (c) => c.id === connection.id && c.source === "platform",
-        ),
-      );
+      const publicService = (await alice.request("cloud/connections")).data.connections.find(c => c.id === connection.id);
+      assert.equal(publicService.source, "platform");
+      assert.equal(publicService.name, "平台写作服务");
+      assert.equal(publicService.model, "");
+      assert.equal(publicService.baseUrl, connection.baseUrl);
+      assert.ok(!("keyMask" in publicService) && !("monthlyLimit" in publicService));
       assert.ok(
         !JSON.stringify((await admin.request("admin/models")).data).includes(
           "platform-fixture-key",

@@ -6,6 +6,8 @@ import { DateField } from "../../components/ui/DateField.jsx";
 import { Check } from "./OfferFields.jsx";
 import { OfferTerms } from "./OfferTerms.jsx";
 import { LivingBudget } from "./LivingBudget.jsx";
+import { useOfferRecords } from "./useOfferRecords.js";
+import { offerDraftKey, offerRecoveryKey } from "./offerStorage.mjs";
 import { cloudRequest } from "../../lib/cloudClient.js";
 import { readOpportunityRef } from "../../../shared/opportunityOffer.mjs";
 import { compensationText } from "../opportunities/opportunityClient.js";
@@ -23,7 +25,6 @@ import "./offers.css";
 import {
   privateDraftFromOpportunity,
   draftHasInput,
-  offerDraftKey,
   readOfferDrafts,
 } from "./offerDrafts.mjs";
 
@@ -35,10 +36,16 @@ const fmt = (n, currency = "CNY") =>
         currency,
         maximumFractionDigits: 2,
       }).format(n / 100);
-const storageKey = (owner) => "luli:offers:v1:" + owner;
+const guestSaveKey = "luli:offers:guest-save";
+function requestedGuestSave(owner) {
+  try {
+    const item = JSON.parse(sessionStorage.getItem(guestSaveKey));
+    return item?.plan?.schema === 1 && typeof item.id === "string" && (!item.owner || item.owner === owner) ? item : null;
+  } catch { return null; }
+}
 function loadLocal(owner) {
   try {
-    const data = JSON.parse(localStorage.getItem(storageKey(owner)));
+    const data = JSON.parse(localStorage.getItem(offerRecoveryKey(owner)));
     return Array.isArray(data)
       ? data.filter((x) => x?.data?.schema === 1 && x.snapshot).slice(0, 50)
       : [];
@@ -56,12 +63,12 @@ function ScenarioSwitch({ value, onChange }) {
   </div>;
 }
 
-export default function OffersPage({ account, route, onBack }) {
+export default function OffersPage({ account, route, onBack, onAccount }) {
   const owner = account?.user?.id || account?.owner?.id || "guest";
   if (account.loading) return <Page title="Offer 收入测算" className="career-page" onBack={onBack}><p role="status">正在打开私人草稿…</p></Page>;
-  return <OfferWorkspace key={owner} owner={owner} account={account} search={route.search} onBack={onBack} />;
+  return <OfferWorkspace key={owner} owner={owner} account={account} search={route.search} onBack={onBack} onAccount={onAccount} />;
 }
-function OfferWorkspace({ owner, account, search, onBack }) {
+function OfferWorkspace({ owner, account, search, onBack, onAccount }) {
   const isLiving = new URLSearchParams(search).get("view") === "living";
   const sourceRef = readOpportunityRef(search);
   const opportunityId = sourceRef?.id, opportunityVersion = sourceRef?.version;
@@ -80,6 +87,16 @@ function OfferWorkspace({ owner, account, search, onBack }) {
     if(index===active)termsRef.current?.reset();
   }
   const authenticated = account?.user?.id === owner;
+  const history = useOfferRecords(owner, authenticated);
+  const [guestSave, setGuestSave] = useState(() => owner !== "guest" ? requestedGuestSave(owner) : null);
+  const [guestSaveNotice, setGuestSaveNotice] = useState("");
+  useEffect(() => {
+    if (authenticated && guestSave && !guestSave.owner) {
+      const claimed = { ...guestSave, owner };
+      try { sessionStorage.setItem(guestSaveKey, JSON.stringify(claimed)); } catch { /* The current tab can still confirm. */ }
+      setGuestSave(claimed);
+    }
+  }, [authenticated, guestSave, owner]);
   const [initial] = useState(() => readOfferDrafts(localStorage, owner));
   const [plans, setPlans] = useState(
     () => initial?.plans || [emptyOffer("方案 A"), emptyOffer("方案 B")],
@@ -94,7 +111,6 @@ function OfferWorkspace({ owner, account, search, onBack }) {
     [latestRules, setLatestRules] = useState(RULESET),
     [ruleNotice, setRuleNotice] = useState("");
   const [saved, setSaved] = useState(() => loadLocal(owner)),
-    [cloud, setCloud] = useState([]),
     [notice, setNotice] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -103,7 +119,6 @@ function OfferWorkspace({ owner, account, search, onBack }) {
     [sourceAccepted, setSourceAccepted] = useState(false),
     [importTarget, setImportTarget] = useState(null);
   const [deleteId, setDeleteId] = useState(""),
-    [restoreTarget, setRestoreTarget] = useState(""),
     [commonWindow, setCommonWindow] = useState(initial?.commonWindow === true),
     [sharedDeductions, setSharedDeductions] = useState(initial?.sharedDeductions !== false),
     [from, setFrom] = useState(typeof initial?.from === "string" ? initial.from : ""),
@@ -121,7 +136,7 @@ function OfferWorkspace({ owner, account, search, onBack }) {
         JSON.stringify({ plans, ruleSets, active, scenario, compare, commonWindow, sharedDeductions, from, to }),
       );
     } catch {
-      setError("本机空间不足，编辑区仍保留，请另存私人云端或整理本机快照。");
+      setError("设备暂存空间不足，当前录入仍在编辑区。");
     }
   }, [owner, plans, ruleSets, active, scenario, compare, commonWindow, sharedDeductions, from, to]);
   useEffect(() => {
@@ -137,15 +152,6 @@ function OfferWorkspace({ owner, account, search, onBack }) {
             "公共规则服务暂不可用，使用内置核验版本；手填金额仍可测算。",
           );
       });
-    if (authenticated)
-      cloudRequest("cloud/offers", {
-        ownerId: owner,
-        signal: controller.signal,
-      })
-        .then((d) => setCloud(d.items || []))
-        .catch((e) => {
-          if (e.name !== "AbortError") setError(e.message);
-        });
     return () => {
       alive.current = false;
       controller.abort();
@@ -182,7 +188,6 @@ function OfferWorkspace({ owner, account, search, onBack }) {
       ps.map((p, i) => (i === active ? { ...p, [key]: value } : p)),
     );
     setNotice("");
-    setRestoreTarget("");
   }
   function nested(group, key, value) {
     change(group, { ...draft[group], [key]: value });
@@ -211,41 +216,21 @@ function OfferWorkspace({ owner, account, search, onBack }) {
         : {}),
     });
   }, [plans, scenario, ruleSets, commonWindow, from, to, sharedDeductions]);
-  async function save(where) {
+  function save() {
     setError("");
-    setBusy(true);
-    try {
-      if (where === "local") {
-        if (saved.length >= 50)
-          throw new Error(
-            "本机已保存 50 份方案，请先整理记录。当前草稿仍保留。",
-          );
-        const item = {
-          id: crypto.randomUUID(),
-          data: structuredClone(draft),
-          snapshot: snapshotOffer(draft, rules),
-          updated_at: new Date().toISOString(),
-        };
-        const next = [item, ...saved];
-        localStorage.setItem(storageKey(owner), JSON.stringify(next));
-        setSaved(next);
-        setNotice("已保存独立的本机方案与规则快照。");
-      } else {
-        const { item } = await cloudRequest("cloud/offers", {
-          method: "POST",
-          ownerId: owner,
-          body: { plan: draft },
-        });
-        if (!alive.current) return;
-        setCloud((items) => [item, ...items]);
-        setRules(item.snapshot.ruleset);
-        setNotice("已存入当前账号私人空间，结果以保存时的规则为准。");
-      }
-    } catch (e) {
-      if (alive.current) setError(e.message || "保存失败，请保留当前草稿");
-    } finally {
-      if (alive.current) setBusy(false);
+    if (owner === "guest") {
+      try { sessionStorage.setItem(guestSaveKey, JSON.stringify({ id: crypto.randomUUID(), plan: draft, ruleVersion: rules.version })); }
+      catch { setError("无法暂存这份方案，请释放设备空间后重试。"); return; }
+      onAccount();
+      return;
     }
+    history.save(draft, rules.version);
+  }
+  function finishGuestSave(saveToAccount) {
+    if (saveToAccount && !history.save(guestSave.plan, guestSave.ruleVersion, guestSave.id)) return;
+    sessionStorage.removeItem(guestSaveKey);
+    if (saveToAccount) setGuestSaveNotice("登录前的方案可在下方「我的测算记录」查看。");
+    setGuestSave(null);
   }
   function restore(item) {
     resetCards(active);
@@ -253,7 +238,6 @@ function OfferWorkspace({ owner, account, search, onBack }) {
       ps.map((p, i) => (i === active ? structuredClone(item.data) : p)),
     );
     setRules(item.snapshot.ruleset);
-    setRestoreTarget(item.id);
     setNotice(
       "已恢复保存时的条款与规则。编辑或切换情景可复算，采用新规则需主动更新。",
     );
@@ -264,15 +248,11 @@ function OfferWorkspace({ owner, account, search, onBack }) {
     try {
       if (where === "local") {
         const next = saved.filter((x) => x.id !== item.id);
-        localStorage.setItem(storageKey(owner), JSON.stringify(next));
+        localStorage.setItem(offerRecoveryKey(owner), JSON.stringify(next));
         setSaved(next);
       } else {
-        await cloudRequest(
-          "cloud/offers/" + item.id + "?revision=" + item.revision,
-          { method: "DELETE", ownerId: owner },
-        );
+        await history.remove(item);
         if (!alive.current) return;
-        setCloud((xs) => xs.filter((x) => x.id !== item.id));
       }
       setDeleteId("");
     } catch (e) {
@@ -297,7 +277,7 @@ function OfferWorkspace({ owner, account, search, onBack }) {
         const next = [old, ...saved];
         if (next.length > 50)
           throw new Error("本机快照已满，请先整理保存记录，当前录入未替换。");
-        localStorage.setItem(storageKey(owner), JSON.stringify(next));
+        localStorage.setItem(offerRecoveryKey(owner), JSON.stringify(next));
         setSaved(next);
       }
       const clean = privateDraftFromOpportunity(source);
@@ -332,6 +312,11 @@ function OfferWorkspace({ owner, account, search, onBack }) {
         if (next !== "compare") setActive(next === "b" ? 1 : 0);
       }} />}>
       <div role="tabpanel" id={"offer-plan-" + tab + "-panel"} aria-labelledby={"offer-plan-" + tab + "-tab"}>
+      {guestSave && authenticated && <div className="offer-notice"><strong>继续保存登录前的「{guestSave.plan.name || "未命名方案"}」</strong>
+        <p>保存至 {account.user.email}</p><div className="offer-actions">
+          <Button disabled={history.saving} onClick={() => finishGuestSave(true)}>确认保存到此账号</Button>
+          <Button variant="ghost" onClick={() => finishGuestSave(false)}>暂不导入</Button></div></div>}
+      {guestSaveNotice && <p className="offer-notice" role="status">{guestSaveNotice}</p>}
       {sourceNotice && <p className="offer-notice">{sourceNotice}</p>}
       {source && !sourceAccepted && (
         <section className="offer-import">
@@ -433,20 +418,12 @@ function OfferWorkspace({ owner, account, search, onBack }) {
         </div>
       )}
       <section className="offer-save" aria-label="保存与回访">
-        <div className="offer-save-intro"><h2>保存方案</h2><p>{owner === "guest" ? "草稿自动保存在此浏览器。" : "草稿按账号保存在本机，另存后可在云端查看。"}</p></div>
+        <div className="offer-save-intro"><h2>我的测算记录</h2>
+          <p>{owner === "guest" ? "草稿暂存在这台设备，登录后可跨设备查看。" : "保存当前方案和生活预算，换设备也能继续查看。"}</p></div>
         <div className="offer-actions">
-          <Button disabled={busy} onClick={() => save("local")}>
-            保存本机方案
+          <Button disabled={busy || history.saving || !draftHasInput(draft, active)} onClick={save}>
+            {owner === "guest" ? "登录后保存" : history.saving ? "正在保存…" : "保存记录"}
           </Button>
-          {authenticated && (
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => save("cloud")}
-            >
-              另存私人云端方案
-            </Button>
-          )}
           <Button
             variant="ghost"
             onClick={() => {
@@ -462,9 +439,14 @@ function OfferWorkspace({ owner, account, search, onBack }) {
             清空当前录入
           </Button>
         </div>
+        {history.feedback && <p role="status" className="offer-save-feedback">{history.feedback}</p>}
+        {history.pendingCount > 0 && <details><summary>待同步 · {history.pendingCount} 份</summary>
+          <ul className="offer-saved">{[...history.pending].map(([id, entry]) => <li key={id}><strong>{entry.plan.name || '未命名方案'}</strong>
+            <Button variant="ghost" disabled={history.saving} onClick={() => history.discard(id)}>取消待同步</Button></li>)}</ul>
+          <Button variant="secondary" disabled={history.saving} onClick={authenticated ? history.retry : onAccount}>{authenticated ? '重试同步' : '重新登录'}</Button></details>}
         {[
-          ["local", "本机保存", saved],
-          ["cloud", "当前账号云端", cloud],
+          ["cloud", "已保存的记录", history.records],
+          ["local", "此设备的恢复副本", saved],
         ].map(
           ([where, label, items]) =>
             items.length > 0 && (
