@@ -1,6 +1,7 @@
 function xmlText(source) {
   if (/<!DOCTYPE/i.test(source)) throw Error('无法读取含自定义实体的文档，请另存为普通 Word 文档。');
   const doc = new DOMParser().parseFromString(source,'application/xml');
+  const blocks = [];
   if (doc.getElementsByTagName('parsererror').length) throw Error('Word 正文格式损坏，请重新导出。');
   function visit(node, depth) {
     if (depth > 100) throw Error('文档结构过于复杂，请另存为普通 Word 文档。');
@@ -17,9 +18,11 @@ function xmlText(source) {
       const cells = parts.map(p => p.trim()).filter(Boolean);
       return cells.join(cells.some(p => p.includes('\n')) ? '\n' : '\t') + '\n';
     }
-    return parts.join('') + (name === 'p' ? '\n' : '');
+    const text = parts.join('');
+    if (name === 'p' && text.trim()) blocks.push({text: text.trim()});
+    return text + (name === 'p' ? '\n' : '');
   }
-  return visit(doc.documentElement,0).trim();
+  return {text: visit(doc.documentElement,0).trim(), blocks};
 }
 export function readWord(buffer, signal) {
   signal.throwIfAborted();
@@ -35,8 +38,10 @@ export function readWord(buffer, signal) {
     worker.onmessage = ({data}) => {
       try {
         if (data.error) throw Error(data.error);
-        const text = data.xml ? [...new Set(data.xml.map(xmlText).filter(Boolean))].join('\n') : data.text;
-        end(resolve,{text,ocrPages:[]});
+        const parts = data.xml ? [...new Set(data.xml)].map(xmlText) : [{text: data.text,
+          blocks: data.text.split('\n').filter(s => s.trim()).map(text => ({text}))}];
+        const blocks = parts.flatMap(p => p.blocks).map((b,i) => ({...b,location: 'Word 第 ' + (i+1) + ' 段'}));
+        end(resolve,{text: parts.map(p => p.text).join('\n'), blocks, ocrPages:[]});
       } catch (error) { end(reject,error); }
     };
     worker.postMessage(buffer,[buffer]);

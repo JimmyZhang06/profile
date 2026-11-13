@@ -1,6 +1,7 @@
 import { restrictMaterialContext } from '../src/lib/materialScope.js';
 import { deliveryMessages } from './delivery-prompt.mjs';
 import { isDeliveryPurpose } from '../src/lib/deliverySelection.js';
+import {resumeImportMessages} from './resume-import-prompt.mjs';
 
 const connections = new Map();
 const json = (res, code, data) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
@@ -42,17 +43,21 @@ export function aiMiddleware() {
       if (!connection) return json(res, 400, { error: '模型连接未就绪。服务重启后，请在 AI 设置中重新保存凭据。' });
       const testing = req.url === '/api/test';
       let context;
+      let importMessages;
       if (!testing) {
-        try { context = restrictMaterialContext(data.context, data.materialApproval, { ...connection, id: data.connectionId }); }
+        try {
+          if (data.purpose === 'resume-import') importMessages = resumeImportMessages(data, connection);
+          else context = restrictMaterialContext(data.context, data.materialApproval, { ...connection, id: data.connectionId });
+        }
         catch (error) { return json(res, 400, { error: error.message }); }
       }
       const delivery = isDeliveryPurpose(data.purpose);
-      const messages = testing ? [{ role: 'user', content: 'Reply with OK.' }] : delivery ? deliveryMessages(data, context) : [
+      const messages = testing ? [{ role: 'user', content: 'Reply with OK.' }] : importMessages || (delivery ? deliveryMessages(data, context) : [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: '以下是当前资料：\n' + JSON.stringify(context) },
         ...(data.purpose !== 'delivery' && Array.isArray(data.history) ? data.history.slice(-10).filter(m => ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').map(m => ({ role: m.role, content: m.content.slice(0, 8000) })) : []),
         { role: 'user', content: String(data.prompt || '').slice(0, 12000) },
-      ];
+      ]);
       const response = await fetch(connection.baseUrl + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(connection.apiKey ? { Authorization: 'Bearer ' + connection.apiKey } : {}) }, body: JSON.stringify({ model: connection.model, messages, stream: !testing, max_tokens: testing ? 64 : connection.maxOutputTokens }), signal: controller.signal, redirect: 'error' });
       if (!response.ok) { await response.body?.cancel(); return json(res, response.status === 401 ? 401 : 502, { error: response.status === 401 ? '凭据无效，请检查 API Key。' : response.status === 429 ? '模型服务暂时限流，请稍后重试。' : '模型服务返回错误（' + response.status + '），请检查地址和模型名称。' }); }
       if (testing) { await response.body?.cancel(); return json(res, 200, { ok: true }); }

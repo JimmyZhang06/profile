@@ -10,6 +10,7 @@ import { api, matchProjects } from '../lib/assistant.js';
 import { jobFromListing } from '../lib/deliverySelection.js';
 import { blankProfile, clone, downloadFile, fieldLabel, fieldValue, proposalState, uid } from '../lib/workspace.js';
 import { normalizeProfile, profileSelections, recordSections, syncLegacyFields } from '../lib/profile.js';
+import {ImportSourceText} from './ImportSourceText.jsx';
 
 export { ProjectsPage } from './ProjectsPage.jsx';
 
@@ -43,6 +44,9 @@ export function SourcePage({ doc, selected, onBack }) {
     <div className="source-section"><span>写入简历时的原始要点</span><blockquote>{source || '该条目尚未填写，可根据下方项目记录补充。'}</blockquote></div>
     <div className="source-section"><span>当前简历中的表达</span><p>{fieldValue(doc.resume, field) || '尚未填写'}</p></div>
     {project ? <details className="source-project-record"><summary>查看这份简历关联的完整项目资料</summary><ProjectRecord project={project} /></details> : null}
+    {doc.importSource && <details className="source-project-record"><summary>查看导入文件的原文与位置</summary>
+      <ImportSourceText source={doc.importSource} ids={doc.importSource.evidence?.[projectId]}/>
+    </details>}
     <p className="quiet-note">这里是当前简历关联的资料快照。素材库中的修改不会自动覆盖这份简历。</p>
   </Page>;
 }

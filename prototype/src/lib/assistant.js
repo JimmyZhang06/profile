@@ -7,6 +7,7 @@ import { deliveryCallPlan, isDeliveryPurpose, restoreDeliveryIds, screeningBatch
 import { deliveryFieldStream } from './deliveryStream.js';
 import { requestsParagraphs, rewriteDirections, rewriteIssue, sameWording } from './revisionText.js';
 import { writingConnectionId } from './writingService.js';
+import {validateImportContext} from '../../shared/resumeImport.mjs';
 
 export async function api(path, payload, signal, ownerId) {
   const response = await fetch('/api/' + (ownerId ? 'cloud/' : '') + path, { method: payload ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'X-Luli-Client': 'workspace', ...(ownerId ? { 'X-Luli-Account': ownerId } : {}) }, ...(payload ? { body: JSON.stringify(payload) } : {}), signal });
@@ -103,20 +104,25 @@ async function localResult({ prompt, doc, selected, library }) {
 const adapters = new Map();
 export function registerAdapter(name, adapter) { adapters.set(name, adapter); }
 class ModelOutputLimit extends Error {
-  constructor() { super('模型输出已达到长度上限，本轮未完成。'); }
+  constructor() { super('模型输出已达到长度上限，本轮未完成。'); this.code = 'OUTPUT_LIMIT'; }
 }
-registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, settings, materialApproval, signal, onText, purpose, prepared, paperSpace, onField, direction, condense, brief, part, characters, covered }) => {
+registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, settings, materialApproval, importApproval, signal, onText, purpose, prepared, paperSpace, onField, direction, condense, brief, part, characters, covered }) => {
   const connection = settings.connections.find(item => item.id === connectionId);
   const delivery = isDeliveryPurpose(purpose);
   const scoped = purpose === 'field-rewrite';
+  const importing = purpose === 'resume-import';
   let context;
-  if (delivery) context = restrictMaterialContext(prepared.context, materialApproval, connection);
+  if (importing) context = validateImportContext(prepared.context, importApproval, connection);
+  else if (delivery) context = restrictMaterialContext(prepared.context, materialApproval, connection);
   else if (scoped) context = {job:doc.job, selected, sources:[],
     fields:[{id:selected, label:fieldLabel(doc.resume,selected), text:fieldValue(doc.resume,selected)}]};
   else context = buildAssistantContext(doc, selected, materialApproval, connection);
   const request = {connectionId, prompt, context, history:[]};
   if (materialApproval) request.materialApproval = materialApproval;
-  if (delivery) {
+  if (importing) {
+    request.purpose = purpose;
+    request.importApproval = importApproval;
+  } else if (delivery) {
     request.purpose = purpose;
     request.deliveryFormat = 'short-ids';
     if (brief) request.brief = true;
@@ -153,13 +159,14 @@ registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, sett
         raw += delta;
         if (raw.length > 200_000) throw new Error('模型返回内容过长，已停止生成。');
         fieldStream?.(delta);
-        if (!delivery && !scoped) onText?.(raw.split('<changes>')[0].replace(/<[^>]*$/, '').trim());
+        if (!delivery && !scoped && !importing) onText?.(raw.split('<changes>')[0].replace(/<[^>]*$/, '').trim());
       }
       if (done) break;
     }
     signal.throwIfAborted();
     if (limited) throw new ModelOutputLimit();
     if (!ended || !raw.trim()) throw new Error('连接中断，回答未完成。请重试。');
+    if (importing) return raw;
     if (!delivery) {
       const answer = parseAnswer(raw, doc, requestsParagraphs(prompt) || /精简|改写|帮我改|突出|扩写|优化.{0,10}(简历|表述|措辞)/.test(prompt),{selected,prompt,context});
       if (!scoped) return answer;
@@ -175,6 +182,12 @@ registerAdapter('compatible', async ({ prompt, doc, selected, connectionId, sett
     return selecting ? validateShortlist(plan, context) : parseDelivery(plan, prepared);
   } finally { reader.releaseLock(); }
 });
+export function requestResumeImport(input) {
+  if (!input.settings.enabled || !input.settings.capabilities.rewrite ||
+      !input.settings.connections.some(c => c.id === input.connectionId && c.enabled !== false))
+    throw Error('AI 整理服务暂时不可用，可以继续手动校对。');
+  return adapters.get('compatible')({...input, purpose: 'resume-import'});
+}
 export async function runAssistant(input) {
   if (!input.settings.enabled || !input.settings.capabilities.rewrite) throw new Error('对话辅助已关闭，仍可手工编辑。');
   const binding = input.settings.bindings.rewrite;

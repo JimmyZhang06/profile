@@ -1,4 +1,5 @@
 import { initialJob, initialProjects, initialResume } from '../data.js';
+import {validImportSource} from '../../shared/resumeImport.mjs';
 import { buildProjectBullets, getProjectBullets, materialFingerprint, projectDetailFields, projectEvidenceText, projectPointIndices, validProjectPointOrder } from './projects.js';
 import { singleColumnSections, templateDesign, validResumeDesign } from './resumeDesign.js';
 import { formattedMarkdown, marksForField, normalizeMarks, validTextStyles } from './richText.js';
@@ -67,6 +68,7 @@ export function initialWorkspace() {
   return { schema: 2, activeId: doc.id, library: initialProjects.map(p => ({ ...clone(p), example: true })), profile: clone(blankProfile), documents: [doc], settings: { enabled: true, capabilities: { rewrite: true, match: true }, bindings: { rewrite: 'auto', match: 'offline' }, connections: [] }, ui: { layoutVersion: 1, sidebar: false, chatRatio: DEFAULT_CHAT_RATIO } };
 }
 export function validWorkspace(value) {
+  if (Array.isArray(value?.documents) && value.documents.some(d=>d?.importSource!==undefined && !validImportSource(d.importSource))) return false;
   const string = v => typeof v === 'string';
   const project = p => p && string(p.id) && string(p.name) && string(p.role) && string(p.date) && Array.isArray(p.facts) && p.facts.every(string) && Array.isArray(p.tags) && p.tags.every(string) && (p.details === undefined || (p.details && typeof p.details === 'object' && !Array.isArray(p.details) && projectDetailFields.every(({ key }) => p.details[key] === undefined || string(p.details[key]))));
   const resume = r => r && validProfileSections(r) && validProjectPointOrder(r.projectPointOrder) && (r.profileSource === undefined || validProfile(r.profileSource)) && Array.isArray(r.sources) && r.sources.every(project) && Array.isArray(r.projectIds) && r.projectIds.every(id => r.sources.some(p => p.id === id)) && (r.projectBullets === undefined || (r.projectBullets && typeof r.projectBullets === 'object' && !Array.isArray(r.projectBullets) && Object.values(r.projectBullets).every(points => Array.isArray(points) && points.every(string)))) && r.overrides && Object.values(r.overrides).every(string) && Object.keys(fieldLabels).every(key => r[key] === undefined || string(r[key])) && validResumeDesign(r.design) && validTextStyles(r.textStyles);

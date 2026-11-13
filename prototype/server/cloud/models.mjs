@@ -15,6 +15,7 @@ import { restrictMaterialContext } from "../../src/lib/materialScope.js";
 import { systemPrompt } from "../ai.mjs";
 import { deliveryMessages } from "../delivery-prompt.mjs";
 import { isDeliveryPurpose } from "../../src/lib/deliverySelection.js";
+import {resumeImportMessages} from '../resume-import-prompt.mjs';
 
 export function safeConnection(row) {
   return {
@@ -169,13 +170,16 @@ export async function streamModel(
   validateModelDestination(connection.data.baseUrl, allowedHosts);
   const safe = safeConnection(connection);
   let context;
+  let importMessages;
   try {
-    if (!testing)
-      context = restrictMaterialContext(
+    if (!testing) {
+      if (body.purpose === 'resume-import') importMessages = resumeImportMessages(body, safe);
+      else context = restrictMaterialContext(
         body.context,
         body.materialApproval,
         safe,
       );
+    }
   } catch (error) {
     throw new HttpError(400, error.message);
   }
@@ -253,7 +257,7 @@ export async function streamModel(
     const delivery = isDeliveryPurpose(body.purpose);
     const messages = testing
       ? [{ role: "user", content: "Reply with OK." }]
-      : delivery ? deliveryMessages(body, context)
+      : importMessages || (delivery ? deliveryMessages(body, context)
       : [
           { role: "system", content: systemPrompt },
           {
@@ -274,7 +278,7 @@ export async function streamModel(
                 }))
             : []),
           { role: "user", content: String(body.prompt || "").slice(0, 12000) },
-        ];
+        ]);
     const response = await adapters.get(
       connection.data.adapter || "compatible",
     )({

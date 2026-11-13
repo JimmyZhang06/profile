@@ -1,5 +1,7 @@
 import {blankProfile, clone, makeDocument, uid} from './workspace.js';
-import {mergeProfiles, newContact, newRecord, normalizeProfile, syncLegacyFields} from './profile.js';
+import {newContact, newRecord, normalizeProfile, syncLegacyFields} from './profile.js';
+import {archiveImportProfile, importArchiveMatches, mergeProjectDetails} from './resumeImportReview.js';
+import {projectDetails} from './projects.js';
 
 const headings = {
   educationEntries:['教育背景','教育经历','学历教育','教育信息','教育','education','academic background'],
@@ -129,6 +131,7 @@ export function importedResume(parsed, title) {
   const profile = syncLegacyFields(parsed.profile), job = {title:parsed.target, company:'', text:''};
   const doc = makeDocument({profile,job,projects:parsed.projects,template:'application'});
   doc.origin = 'file';
+  if (parsed.importSource) doc.importSource = clone(parsed.importSource);
   doc.title = title.trim() || '导入的简历';
   doc.resume = {...doc.resume,sectionOrder:'application',additional:parsed.additional,
     projectBullets:Object.fromEntries(parsed.projects.map(p => [p.id,[...p.facts]]))};
@@ -136,25 +139,46 @@ export function importedResume(parsed, title) {
   return doc;
 }
 
-export function appendImportedResume(state, doc, archive) {
+export function appendImportedResume(state, doc, archive, choices = {}) {
   if (state.documents.some(d => d.id === doc.id)) return state;
   const update = {...state, documents:[...state.documents,doc],activeId:doc.id};
   if (!archive) return update;
-  update.profile = mergeProfiles(state.profile,doc.resume.profileSource);
-  const signature = p => JSON.stringify([p.name,p.role,p.date,p.facts]);
+  const matches = importArchiveMatches({profile:doc.resume.profileSource,projects:doc.resume.sources},state.profile,state.library);
+  const actions = {};
+  for(const [id,decision] of Object.entries(choices)) {
+    const match=matches.find(m=>m.id===id);
+    if(typeof decision==='object' && decision?.action==='merge' && (!match || match.existing.id!==decision.targetId || JSON.stringify(match.existing)!==decision.expected))
+      throw Error('资料库中的相似经历已更新，请重新核对后选择入库方式。');
+    actions[id]=typeof decision==='string' ? decision : decision.action;
+  }
+  update.profile = archiveImportProfile(state.profile,doc.resume.profileSource,matches,actions);
+  const signature = p => JSON.stringify([p.name,p.role,p.date,p.facts,projectDetails(p)]);
   const known = new Map(state.library.map(p => [signature(p),p]));
   const library = [...state.library], sources = [], usedIds = new Set();
   for (const p of doc.resume.sources) {
-    const prior = known.get(signature(p));
-    if (!prior) { library.push(clone(p)); known.set(signature(p),p); }
-    const id = prior && !usedIds.has(prior.id) ? prior.id : p.id;
+    const match = matches.find(m=>m.kind==='projects' && m.id===p.id), choice=actions[p.id];
+    const prior = known.get(signature(p)) || (match?.exact ? match.existing : null);
+    if(prior?.archived && choice!=='skip') {
+      const at=library.findIndex(r=>r.id===prior.id); library[at]={...prior,archived:false};
+    }
+    if (!prior && choice !== 'skip') {
+      if (match && choice==='merge') {
+        const at=library.findIndex(r=>r.id===match.existing.id), original=library[at];
+        library[at]={...original,facts:[...new Set([...original.facts,...p.facts])],details:mergeProjectDetails(original,p)};
+      } else { library.push(clone(p)); known.set(signature(p),p); }
+    }
+    const existingId = prior?.id || (match && choice==='merge' ? match.existing.id : null);
+    const id = existingId && !usedIds.has(existingId) ? existingId : p.id;
     sources.push({...p,id});
     usedIds.add(id);
   }
   // Refer to existing originals when importing an already archived project.
   const resume = {...doc.resume,sources,projectIds:sources.map(p => p.id),
     projectBullets:Object.fromEntries(sources.map((p,i) => [p.id,doc.resume.projectBullets[doc.resume.sources[i].id]]))};
-  update.documents = [...state.documents,{...doc,resume,versions:doc.versions.map(v => ({...v,resume:clone(resume)}))}];
+  const evidence = doc.importSource && Object.fromEntries(doc.resume.sources.map((p,i)=>[sources[i].id,doc.importSource.evidence[p.id] || []]));
+  update.documents = [...state.documents,{...doc,resume,
+    ...(evidence ? {importSource:{...doc.importSource,evidence:{...doc.importSource.evidence,...evidence}}} : {}),
+    versions:doc.versions.map(v => ({...v,resume:clone(resume)}))}];
   update.library = library;
   return update;
 }

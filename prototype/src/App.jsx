@@ -246,14 +246,15 @@ export function App({ workspace, account }) {
     setSelected(null); setEdit(null); setFocus(false); setDesignOpen(false); setMobileView('chat'); finish(null);
     notify('简历已恢复，正文、对话和版本记录均保留');
   }
-  function saveFileImport(applyImport, archive) {
+  function saveFileImport(applyImport, archive, tailor = false) {
     if (!guard()) return false;
     const next = applyImport(latest.current);
     if (!validWorkspace(next) || (workspace.cloud && (next.documents.length > 100 || next.library.length > 500 || JSON.stringify(next).length > 8000000))) {
       throw Error('这次导入超出工作区容量，请减少资料或整理回收站。');
     }
     stop(); setState(applyImport);
-    if(importFrom==='tailor'&&opportunitySource) {
+    if(tailor || (importFrom==='tailor'&&opportunitySource)) {
+      if(importFrom!=='tailor') {setTailorJob(null);setTailorOptions(null);setOpportunitySource(null);}
       setTailorFileId(next.activeId); setTailorInstance(n=>n+1); finish('tailor');
     } else finish(null);
     setSelected(null); setEdit(null); setDesignOpen(false); setFocus(false); setMobileView('document');
@@ -381,7 +382,7 @@ export function App({ workspace, account }) {
     {CareerView ? <Suspense fallback={<Page title={careerPages[page]} onBack={() => navigate(null)}><p role="status">正在读取…</p></Page>}><CareerView key={page === 'opportunities' ? (account.user?.id || 'guest') : page} account={account} route={route} onAccount={() => open('account')} onBack={() => navigate(null)}
       {...(page === 'opportunities' && {onNewResume:()=>open('new'),findResume:id=>resumesForOpportunity(state.documents,id)[0],onResume:id=>withAccountClosed(()=>selectDocument(id))})} /></Suspense> : null}
     {page === 'opportunity-start' ? <Page title="用岗位制作简历" onBack={()=>opportunityRef ? openLink('/opportunities/'+opportunityRef.id) : navigate(null)} backLabel="返回岗位"><div className="op-resume-source">本次岗位提供 JD。下一步选择要用于写作的个人资料。</div>{opportunityError?<p className="form-error" role="alert">{opportunityError}</p>:null}{opportunity?<><h2>{opportunity.title}</h2><p>{opportunity.company} · 公开版本 {opportunity.version} · {opportunity.status==='open'?'在招':'已暂停或截止'}</p>{opportunity.version!==opportunityRef.version?<p className="op-notice">你打开的版本为 V{opportunityRef.version}，当前为 V{opportunity.version}。请核对下面的现行 JD 后继续。</p>:null}<div className="op-prose">{opportunity.jd||'当前岗位不再提供可导入的 JD。'}</div>{opportunity.status==='open'?<div className="op-actions"><Button onClick={startOpportunity}>确认 JD，另建一份投递简历</Button></div>:null}{resumesForOpportunity(state.documents,opportunity.id).map(d=><div className="op-notice" key={d.id}><strong>{d.title}</strong><p>已使用 V{d.opportunitySource.version}{d.opportunitySource.version!==opportunity.version?' · 岗位有更新，原稿仍保留':''}</p><Button variant="secondary" onClick={()=>selectDocument(d.id)}>继续打磨这份简历</Button></div>)}<WorkspaceLink href={'/opportunities/'+opportunity.id}>返回岗位详情与当前投递渠道</WorkspaceLink></>:!opportunityError?<p>正在核对岗位当前状态…</p>:null}</Page>:null}
-    {page === 'file-import' ? <Suspense fallback={<Page title="正在打开文件导入" onBack={() => navigate(importFrom)} />}><ResumeImportPage archiveDefault={importFrom === 'library'} destination={workspace.cloud ? '云工作区 · '+account.owner.email : '本机工作区'} onBack={() => navigate(importFrom)} onImport={saveFileImport}/></Suspense> : null}
+    {page === 'file-import' ? <Suspense fallback={<Page title="正在打开文件导入" onBack={() => navigate(importFrom)} />}><ResumeImportPage key={account.owner?.id || 'local'} settings={{...settings,...(workspace.cloud ? {cloudAccount:account.owner.id} : {})}} existingProfile={state.profile} library={state.library} archiveDefault={importFrom === 'library'} destination={workspace.cloud ? '云工作区 · '+account.owner.email : '本机工作区'} onBack={() => navigate(importFrom)} onImport={saveFileImport}/></Suspense> : null}
     {page === 'delete' && currentDoc ? <DeleteDocumentPage doc={doc} onBack={() => navigate(null)} onConfirm={trashCurrentDocument} /> : null}
     {page === 'trash' ? <DocumentTrashPage documents={state.documents} onBack={() => navigate(null)} onRestore={restoreDeletedDocument} onEmpty={confirmed => { if (guard()) setState(s => emptyDocumentTrash(s, confirmed)); }} /> : null}
     {['library', 'profile', 'projects'].includes(page) ? <LibraryPage onImport={() => request(() => { setImportFrom('library'); finish('file-import'); })} hasActiveDocument={!!currentDoc} key={page + doc.id} profile={state.profile} library={state.library} doc={doc} saveState={saveState} initialTab={page === 'projects' ? 'projects' : 'basics'} onBack={() => navigate(tailorOptions ? 'tailor' : null)} onSaveProfile={saveProfile} onApplyProfile={applyProfile} projectProps={{hasActiveDocument: !!currentDoc, busy: !!busyId, settings: chatSettings, onOpenJob: () => open('job'), onSaveProject: p => setState(s => ({...s, library: s.library.some(old => old.id === p.id) ? s.library.map(old => old.id === p.id ? p : old) : [...s.library, p]})), onApply: applyProjects, onArchive: (id, archived) => setState(s => ({...s, library: s.library.map(p => p.id === id ? {...p, archived} : p)}))}} /> : null}

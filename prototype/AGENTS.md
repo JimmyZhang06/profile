@@ -1,5 +1,11 @@
 # Prototype Instructions
 
+## Grounded resume import (2026-11-13)
+
+Read Word/PDF on the device and preserve paragraph/page locations with stable source block IDs. AI import uses the existing authenticated pluggable model service and its quotas, with a dedicated server prompt and an explicit per-operation action. Hide locally identified names and contacts, expose the exact outgoing text in an optional disclosure, and accept only exact source excerpts and block references. Retain unmatched wording and the complete extracted source with the independent imported resume. Keep the source outside ordinary conversation context.
+
+Review each experience as an editable, compact card with classification, split/merge and original-text access. Check similar archive entries before a user-selected merge, deduplicate identical entries and retain existing resume snapshots. Offer direct continuation into JD tailoring with the imported experiences. Use sequential, bounded requests for long documents and output-limit recovery; cancelled or invalid responses must preserve the current review. Verify with fictional Word, text PDF, scanned PDF and mocked model streams on the normal upload-to-cloud-save route.
+
 ## Opportunity board and offer calculations (2026-11-12)
 
 The opportunity board, Offer calculator and salary references are pages of the personal workspace. Use its sidebar, mobile navigation drawer, page header and theme. Keep direct links and browser history usable while the editor stays mounted. On desktop aim to show the key terms and estimate together and fit the regional overview in one screen. Expand optional details in place and keep mobile controls readable.
